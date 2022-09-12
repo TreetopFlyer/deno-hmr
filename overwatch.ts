@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.155.0/http/mod.ts";
 import { debounce } from "https://deno.land/std@0.151.0/async/debounce.ts";
 import { walk } from "https://deno.land/std@0.155.0/fs/mod.ts";
 
@@ -18,10 +17,7 @@ const SocketsBroadcast =(inData:string)=>
 }
 // http server
 let Server:Deno.Process<Deno.RunOptions>|undefined;
-const ServerArgs:Deno.RunOptions = {cmd:["deno", "run", "-A", "-r", "underwatch.tsx"]};
-
-Server = Deno.run(ServerArgs);
-
+const ServerArgs:Deno.RunOptions = {cmd:["deno", "run", "-A", "--unstable", "underwatch.tsx"]};
 const ServerReboot =():void=>
 {
     Server?.kill("SIGTERM");
@@ -41,10 +37,11 @@ const ProcessFiles =debounce(async()=>
 }, 500);
 const FileProcessor =async(inFile:string, inAction:string)=>
 {
-    const options:Deno.RunOptions = {cmd:["deno", "cache", `${inFile}`], env:{"DENO_DIR":"./.cached"}};
+    const options:Deno.RunOptions = {cmd:["deno", "cache", `${inFile}`]};
     const { web, cached, extension } = FilePathParts(inFile);
     if(inAction == "remove")
     {
+        console.log("need to delete", cached);
         Memory.delete(web);
     }
     else if (extension == ".ts" || extension == ".tsx" || extension == ".jsx")
@@ -94,7 +91,7 @@ const FileFromCached =async(inCacheDir:string):Promise<MemoryFile>=>
 };
 
 // websocket server for HMR
-serve((inRequest)=>
+Deno.serve({port:4422}, (inRequest)=>
 {
     //const upgrade = inRequest.headers.get("upgrade") || "";
     try
@@ -125,8 +122,9 @@ serve((inRequest)=>
     {
       return new Response("request isn't trying to upgrade to websocket.");
     }
-}, {port:4422});
+});
 
+ServerReboot();
 
 // WALKER | To initialize the program: process all project files.
 // - look in project/, find the equivalent in the cache, and push things into Memory
