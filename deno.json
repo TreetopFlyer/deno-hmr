@@ -1,6 +1,6 @@
 {
     "tasks":
     {
-        "go": "deno run -A --unstable overwatch.ts"
+        "go": "DENO_DIR=./.cached deno run -A --unstable overwatch.ts"
     }
 }
