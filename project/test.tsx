@@ -1,0 +1,12 @@
+import React from "https://esm.sh/react@18.2.0";
+
+export const counter =()=> <p>loading</p>;
+
+export default ()=>
+{
+    const [countGet, countSet] = React.useState(4);
+
+    return <div>
+        <button onClick={e=>countSet(countGet+1)}>{countGet}</button>
+    </div>;
+}
