@@ -1,0 +1,6 @@
+{
+    "tasks":
+    {
+        "go": "deno run -A --unstable overwatch.ts"
+    }
+}

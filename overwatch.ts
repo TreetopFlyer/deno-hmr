@@ -1,6 +1,5 @@
 import { debounce } from "https://deno.land/std@0.151.0/async/debounce.ts";
 import { walk } from "https://deno.land/std@0.155.0/fs/mod.ts";
-import { isPathSeparator } from "https://deno.land/std@0.155.0/path/_util.ts";
 
 export type MemoryFile = {
     xpiled?:string,
@@ -25,18 +24,13 @@ const ProcessFiles =debounce(async()=>
 
 const FileProcessor =async(inFile:string, inAction:string)=>
 {
-    console.log("FileProcessor sees", inFile)
     const options:Deno.RunOptions = {cmd:["deno", "cache", `${inFile}`], env:{"DENO_DIR":"./.cached"}};
-    const cacheDir = dirCWD + "\\.cached\\gen\\file\\" + inFile.replace(":", "")+".js";
-    const webDir = inFile.substring(dirCWD.length).replaceAll("\\", "/");
-    const ext = inFile.substring(inFile.lastIndexOf("."));
-    console.log("dirWeb in cache writer:", webDir);
-
+    const { web, cached, extension } = FilePathParts(inFile);
     if(inAction == "remove")
     {
-        Memory.delete(webDir);
+        Memory.delete(web);
     }
-    else if (ext == ".ts" || ext == ".tsx" || ext == ".jsx")
+    else if (extension == ".ts" || extension == ".tsx" || extension == ".jsx")
     {
         try
         {
@@ -44,9 +38,9 @@ const FileProcessor =async(inFile:string, inAction:string)=>
             await process.status();
             try
             {
-                const file = await FileFromCached(cacheDir);
-                Memory.set(webDir, file);
-                console.log(`File Processor: ${webDir} successfully updated.`);
+                const file = await FileFromCached(cached);
+                Memory.set(web, file);
+                console.log(`File Processor: ${web} successfully updated.`);
             }
             catch(e)
             {
@@ -61,9 +55,19 @@ const FileProcessor =async(inFile:string, inAction:string)=>
     else
     {
         const code = await Deno.readTextFile(inFile);
-        Memory.set(webDir, {xpiled:code});
+        Memory.set(web, {xpiled:code});
     }
 };
+
+
+const FilePathParts =(inFullProjectPath:string):{cached:string, web:string, extension:string}=>
+{
+    const cwdDir = Deno.cwd();
+    const cacheDir = cwdDir + "\\.cached\\gen\\file\\" + inFullProjectPath.replace(":", "")+".js";
+    const webDir = inFullProjectPath.substring(cwdDir.length).replaceAll("\\", "/");
+    const ext = inFullProjectPath.substring(inFullProjectPath.lastIndexOf("."));
+    return { cached: cacheDir, web: webDir, extension: ext };
+}
 
 const FileFromCached =async(inCacheDir:string):Promise<MemoryFile>=>
 {
@@ -73,29 +77,47 @@ const FileFromCached =async(inCacheDir:string):Promise<MemoryFile>=>
         xpiled: code.substring(0, split),
         source: code.substring(split)
     };
-}
+};
 
-// Process all files
-// - look in .cached/ and push things into Memory
-for await (const entry of walk(".cached", {includeDirs:false, exts:[".ts.js", ".tsx.js", ".jsx.js"]}))
+// WALKER | To initialize the program: process all project files.
+// - look in project/, find the equivalent in the cache, and push things into Memory
+for await (const entry of walk(Deno.cwd()+"\\project", {includeDirs:false, exts:[".ts", ".tsx", ".js", ".jsx"]}))
 {
-    // entry.path ~= .cached\gen\file\C\Web Projects\amber-reloader\project\test.tsx.js
-    // dirCWD ~= C:\Web Projects\amber-reloader
+    const { web, cached, extension } = FilePathParts(entry.path);
+    if(extension == ".js")
+    {
+        const code = await Deno.readTextFile(entry.path)
+        Memory.set(web, { xpiled: code });
+    }
+    else
+    {
+        try
+        {
+            // try to pull the file from cache
+            const file = await FileFromCached(cached);
+            Memory.set(web, file);
+            console.log(`cached version of ${web} found.`);
+        }
+        catch(_e)
+        {
+            // push the file 
+            await FileProcessor(entry.path, "initialize");
+            console.log(`cached version of ${web} has just been created.`);
+        }
 
-    const splitter = dirCWD.replace(":", "");
-    const index = entry.path.indexOf(splitter);
-    let webDir = entry.path.substring(index+splitter.length).replaceAll("\\", "/");
-    webDir = webDir.substring(0, webDir.length-3);
-
-    const file = await FileFromCached(entry.path);
-    Memory.set(webDir, file);
+    }
+    
 }
 
-// Process individual files as they are changed
-// - look in project/ and push things into Memory and .cached/
+// WATCHER | As the program runs, process individual files as they are changed.
+// - look in project/ and push things into Memory *and* .cached/
 const watcher = Deno.watchFs("project");
 for await (const event of watcher)
 {
-    event.paths.forEach(path => filesChanged.set(path, event.kind));
+    event.paths.forEach(path =>
+    {
+        console.log("Watcher", path);
+        filesChanged.set(path, event.kind);
+    });
     ProcessFiles();
 }
