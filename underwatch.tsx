@@ -1,7 +1,5 @@
 import Message from "./project/test.tsx";
 
-console.log("dir???", Deno.env.get("DENO_DIR"));
-
 const file = `<!doctype html>
 <html>
     <head></head>

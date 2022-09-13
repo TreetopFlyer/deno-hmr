@@ -7,14 +7,8 @@ export type MemoryFile = {
     styles?:string,
 };
 
-const filesChanged:Map<string, string> = new Map();
-export const Memory:Map<string, MemoryFile> = new Map();
 const dirCWD = Deno.cwd(); console.log("Overwatch running at", dirCWD);
-const Sockets:Set<WebSocket> = new Set();
-const SocketsBroadcast =(inData:string)=>
-{
-    for (const socket of Sockets){ socket.send(inData); }
-}
+
 // http server
 let Server:Deno.Process<Deno.RunOptions>|undefined;
 const ServerArgs:Deno.RunOptions = {cmd:["deno", "run", "-A", "--unstable", "underwatch.tsx"]};
@@ -24,76 +18,16 @@ const ServerReboot =():void=>
     Server?.close();
     Server = Deno.run(ServerArgs);
 };
-
-const ProcessFiles =debounce(async()=>
-{
-    console.log("processing files");
-    for await (const [file, action] of filesChanged)
-    {
-        await FileProcessor(file, action);
-    }
-    filesChanged.clear();
-    SocketsBroadcast("reload")
-}, 500);
-const FileProcessor =async(inFile:string, inAction:string)=>
-{
-    const options:Deno.RunOptions = {cmd:["deno", "cache", `${inFile}`]};
-    const { web, cached, extension } = FilePathParts(inFile);
-    if(inAction == "remove")
-    {
-        console.log("need to delete", cached);
-        Memory.delete(web);
-    }
-    else if (extension == ".ts" || extension == ".tsx" || extension == ".jsx")
-    {
-        try
-        {
-            const process = Deno.run(options);
-            await process.status();
-            try
-            {
-                const file = await FileFromCached(cached);
-                Memory.set(web, file);
-                console.log(`File Processor: ${web} successfully updated.`);
-            }
-            catch(e)
-            {
-                console.error("File Processor: error reading cached file", e);
-            }
-        }
-        catch(e)
-        {
-            console.error("File Processor: error starting subprocess", e);
-        }
-    }
-    else
-    {
-        const code = await Deno.readTextFile(inFile);
-        Memory.set(web, {xpiled:code});
-    }
-};
-const FilePathParts =(inFullProjectPath:string):{cached:string, web:string, extension:string}=>
-{
-    const cwdDir = Deno.cwd();
-    const cacheDir = cwdDir + "\\.cached\\gen\\file\\" + inFullProjectPath.replace(":", "")+".js";
-    const webDir = inFullProjectPath.substring(cwdDir.length).replaceAll("\\", "/");
-    const ext = inFullProjectPath.substring(inFullProjectPath.lastIndexOf("."));
-    return { cached: cacheDir, web: webDir, extension: ext };
-}
-const FileFromCached =async(inCacheDir:string):Promise<MemoryFile>=>
-{
-    const code = await Deno.readTextFile(inCacheDir);
-    const split = code.lastIndexOf("//# sourceMappingURL=");
-    return {
-        xpiled: code.substring(0, split),
-        source: code.substring(split)
-    };
-};
+ServerReboot();
 
 // websocket server for HMR
+const Sockets:Set<WebSocket> = new Set();
+const SocketsBroadcast =(inData:string)=>
+{
+    for (const socket of Sockets){ socket.send(inData); }
+}
 Deno.serve({port:4422}, (inRequest)=>
 {
-    //const upgrade = inRequest.headers.get("upgrade") || "";
     try
     {
       const { response, socket } = Deno.upgradeWebSocket(inRequest);
@@ -124,40 +58,113 @@ Deno.serve({port:4422}, (inRequest)=>
     }
 });
 
-ServerReboot();
-
-// WALKER | To initialize the program: process all project files.
-// - look in project/, find the equivalent in the cache, and push things into Memory
-for await (const entry of walk(Deno.cwd()+"\\project", {includeDirs:false, exts:[".ts", ".tsx", ".js", ".jsx"]}))
+localStorage.clear();
+const filesChanged:Map<string, string> = new Map();
+const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false)=>
 {
-    const { web, cached, extension } = FilePathParts(entry.path);
-    if(extension == ".ts" || extension == ".tsx" || extension == ".jsx")
+    const ext = inFullProjectPath.substring(inFullProjectPath.lastIndexOf("."));
+    const cachePathBase = dirCWD + "\\.cached\\gen\\file\\" + inFullProjectPath.replace(":", "");
+    const cachePath = cachePathBase+".js";
+    
+    const webPath = inFullProjectPath.substring(dirCWD.length).replaceAll("\\", "/");
+    const isTranspiled = (ext == ".ts" || ext == ".tsx" || ext == ".jsx");
+
+    if(deletion)
+    {
+        if(isTranspiled)
+        {
+            const cachePathMeta = cachePathBase+".meta";
+            await Deno.remove(cachePath);
+            await Deno.remove(cachePathMeta);
+            localStorage.removeItem(webPath);
+            localStorage.removeItem(webPath+".map");
+        }
+        else
+        {
+            localStorage.removeItem(webPath);
+        }
+        return;
+    }
+
+    const ReadFile =async(cachePath:string):Promise<string|false>=>
     {
         try
         {
-            // try to pull the file from cache
-            const file = await FileFromCached(cached);
-            Memory.set(web, file);
-            console.log(`cached version of ${web} found.`);
+            const code = await Deno.readTextFile(cachePath);
+            return code;
         }
-        catch
+        catch{ return false; }
+    };
+    const WriteCache =async(inFullProjectPath:string):Promise<void>=>
+    {
+        const process = Deno.run({cmd:["deno", "cache", `${inFullProjectPath}`]});
+        await process.status();
+    };
+    const WriteMemory =(code:string, isTranspiled:boolean)=>
+    {
+        if(isTranspiled)
         {
-            // add to cache and then pull
-            await FileProcessor(entry.path, "initialize");
-            console.log(`cached version of ${web} has just been created.`);
+            const split = code.lastIndexOf("//# sourceMappingURL=");
+            localStorage.setItem(webPath, code.substring(0, split));
+            localStorage.setItem(webPath+".map", code.substring(split));
+        }
+        else
+        {
+            localStorage.setItem(webPath, code);
+        }
+    };
+    const WriteCacheAndMemory =async(inFullProjectPath:string, cachePath:string, isTranspiled:boolean)=>
+    {
+        WriteCache(inFullProjectPath);
+        const code:string|false = await ReadFile(cachePath);
+        if(code)
+        {
+            WriteMemory(code, isTranspiled);
+        }
+    };
+    
+    if(isTranspiled)
+    {
+        if(checkFirst)
+        {
+            const code:string|false = await ReadFile(cachePath);
+            code ? WriteMemory(code, isTranspiled) : WriteCacheAndMemory(inFullProjectPath, cachePath, isTranspiled);
+        }
+        else
+        {
+            WriteCacheAndMemory(inFullProjectPath, cachePath, isTranspiled);
         }
     }
     else
     {
-        const code = await Deno.readTextFile(entry.path)
-        Memory.set(web, { xpiled: code });
+        const code = await ReadFile(inFullProjectPath);
+        if(code)
+        {
+            WriteMemory(code, isTranspiled)
+        }
     }
-    
-}
 
+}
+// WALKER | To initialize the program: process all project files.
+// - look in project/, find the equivalent in the cache, and push things into Memory
+for await (const entry of walk(dirCWD+"\\project", {includeDirs:false}))
+{
+    console.log("Walker", entry.path);
+    await XPile(entry.path, true);
+}
+console.log(localStorage);
 // WATCHER | As the program runs, process individual files as they are changed.
 // - look in project/ and push things into Memory *and* .cached/
 const watcher = Deno.watchFs("project");
+const ProcessFiles =debounce(async()=>
+{
+    for await (const [file, action] of filesChanged)
+    {
+        await XPile(file, false, action=="remove");
+    }
+    filesChanged.clear();
+    SocketsBroadcast("reload");
+}, 500);
 for await (const event of watcher)
 {
     event.paths.forEach(path =>
