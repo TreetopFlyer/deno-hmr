@@ -8,7 +8,7 @@ const file = `<!doctype html>
         <h1>${Message}</h1>
         <script type="module">
             import * as I from "/project/test.tsx";
-            setInterval(()=>{console.log(I)}, 1000);
+            setInterval(()=>{console.log(I.default)}, 1000);
         </script>
     </body>
 </html>`;
@@ -22,7 +22,7 @@ const proxy = async(inModule:string)=>
     return `
 import * as Import from "${inModule}?reload=0";
 import Reloader from "/hmr";
-${ members.map(m=>`let proxy_${m} = Reloader.${m}; export { proxy_${m} as ${m} };`).join(`
+${ members.map(m=>`let proxy_${m} = Import.${m}; export { proxy_${m} as ${m} };`).join(`
 `) }
 const reloadHandler = (updatedModule)=>
 {
