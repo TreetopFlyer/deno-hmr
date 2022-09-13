@@ -60,7 +60,7 @@ Deno.serve({port:4422}, (inRequest)=>
 
 localStorage.clear();
 const filesChanged:Map<string, string> = new Map();
-const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false)=>
+const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):Promise<string>=>
 {
     const ext = inFullProjectPath.substring(inFullProjectPath.lastIndexOf("."));
     const cachePathBase = dirCWD + "\\.cached\\gen\\file\\" + inFullProjectPath.replace(":", "");
@@ -83,7 +83,7 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false)=>
         {
             localStorage.removeItem(webPath);
         }
-        return;
+        return webPath;
     }
 
     const ReadFile =async(cachePath:string):Promise<string|false>=>
@@ -105,8 +105,11 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false)=>
         if(isTranspiled)
         {
             const split = code.lastIndexOf("//# sourceMappingURL=");
-            localStorage.setItem(webPath, code.substring(0, split));
+            const wentIn = code.substring(0, split)
+            localStorage.setItem(webPath, wentIn);
             localStorage.setItem(webPath+".map", code.substring(split));
+            console.log(`---- what went in ${wentIn.substring(0, 70)}`);
+            console.log(`---- checking again ${localStorage.getItem(webPath).substring(0, 70)}`);
         }
         else
         {
@@ -115,7 +118,7 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false)=>
     };
     const WriteCacheAndMemory =async(inFullProjectPath:string, cachePath:string, isTranspiled:boolean)=>
     {
-        WriteCache(inFullProjectPath);
+        await WriteCache(inFullProjectPath);
         const code:string|false = await ReadFile(cachePath);
         if(code)
         {
@@ -128,11 +131,11 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false)=>
         if(checkFirst)
         {
             const code:string|false = await ReadFile(cachePath);
-            code ? WriteMemory(code, isTranspiled) : WriteCacheAndMemory(inFullProjectPath, cachePath, isTranspiled);
+            code ? WriteMemory(code, isTranspiled) : await WriteCacheAndMemory(inFullProjectPath, cachePath, isTranspiled);
         }
         else
         {
-            WriteCacheAndMemory(inFullProjectPath, cachePath, isTranspiled);
+            await WriteCacheAndMemory(inFullProjectPath, cachePath, isTranspiled);
         }
     }
     else
@@ -143,6 +146,8 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false)=>
             WriteMemory(code, isTranspiled)
         }
     }
+
+    return webPath;
 
 }
 // WALKER | To initialize the program: process all project files.
@@ -160,10 +165,17 @@ const ProcessFiles =debounce(async()=>
 {
     for await (const [file, action] of filesChanged)
     {
-        await XPile(file, false, action=="remove");
+        if(action=="remove")
+        {
+            await XPile(file, false, true);
+        }
+        else
+        {
+            const updated = await XPile(file, false);
+            SocketsBroadcast(updated);
+        }
     }
     filesChanged.clear();
-    SocketsBroadcast("reload");
 }, 500);
 for await (const event of watcher)
 {

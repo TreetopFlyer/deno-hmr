@@ -1,8 +1,8 @@
 import React from "https://esm.sh/react@18.2.0";
 
+const CONST = "2";
 
-
-export default "A VALUE!";
+export default CONST;
 
 export const Clicker =()=>
 {
