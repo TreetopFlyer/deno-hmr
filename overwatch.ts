@@ -108,8 +108,6 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
             const wentIn = code.substring(0, split)
             localStorage.setItem(webPath, wentIn);
             localStorage.setItem(webPath+".map", code.substring(split));
-            console.log(`---- what went in ${wentIn.substring(0, 70)}`);
-            console.log(`---- checking again ${localStorage.getItem(webPath).substring(0, 70)}`);
         }
         else
         {

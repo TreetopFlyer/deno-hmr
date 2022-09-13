@@ -7,8 +7,12 @@ const file = `<!doctype html>
     <body>
         <h1>${Message}</h1>
         <script type="module">
+            import Reloader from "/hmr";
             import * as I from "/project/test.tsx";
-            setInterval(()=>{console.log(I.default)}, 1000);
+            Reloader("reload-complete", ()=>
+            {
+                console.log(I.default);
+            })
         </script>
     </body>
 </html>`;
@@ -24,28 +28,39 @@ import * as Import from "${inModule}?reload=0";
 import Reloader from "/hmr";
 ${ members.map(m=>`let proxy_${m} = Import.${m}; export { proxy_${m} as ${m} };`).join(`
 `) }
+
 const reloadHandler = (updatedModule)=>
 {
     ${ members.map(m=>`proxy_${m} = updatedModule.${m};`).join(`
 `) }
 };
-let reloads = 0;
-Reloader("${inModule}", ()=>
-{
-    reloads++;
-    import("${inModule}?reload="+reloads).then(reloadHandler);
 
-});`;
+Reloader("${inModule}", reloadHandler);`;
+
 };
 
 const hmr = `
+
+let reloads = 0;
 const socket = new WebSocket('ws://localhost:4422/');
 socket.addEventListener('message', (event) =>
 {
     console.log('Message from server ', event.data);
     console.log("looking for registered handlers for", event.data, "in", listeners.get(event.data));
+
     const members = listeners.get(event.data)??[];
-    members.forEach(m=>m());
+    reloads++;
+    Promise.all(
+        members.map(m=>
+        {
+            return import(event.data+"?reload="+reloads)
+            .then(updatedModule=>m(updatedModule));
+        })
+    ).then(()=>
+    {
+        const members = listeners.get("reload-complete")??[];
+        members.forEach(m=>m());
+    });
 });
 
 const listeners = new Map();
@@ -82,7 +97,6 @@ serve(
         if(reload)
         {
             console.log("serving updated module", url.pathname);
-            console.log(`this was just READ in local storage under ${url.pathname}`, localStorage.getItem(url.pathname));
             return new Response(localStorage.getItem(url.pathname), {status:200, headers:{"content-type":"application/javascript", "cache-control":"no-cache,no-save"}});
         }
         else
