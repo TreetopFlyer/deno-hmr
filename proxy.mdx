@@ -1,0 +1,24 @@
+// 1
+import { export1, export2 } from './original.mjs?mtime=0';
+import { hmrClient } from '/hmrClient.mjs';
+
+// 2
+let export1Proxy = export1;
+let export2Proxy = export2;
+
+// 3
+export {
+   export1Proxy as export1,
+   export2Proxy as export2
+};
+
+// 4
+hmrClient.onUpdate('original.mjs', (newMtime) => {
+    // 5
+    import(`./original.mjs?mtime=${newMtime}`)
+        .then(newExports => {
+            // 6
+            export1Proxy = newExports.export1;
+            export2Proxy = newExports.export2;
+        })
+})
