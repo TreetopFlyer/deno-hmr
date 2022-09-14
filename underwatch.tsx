@@ -1,18 +1,17 @@
 import { serve } from "https://deno.land/std@0.155.0/http/server.ts";
-import Message from "./project/test.tsx";
 
 const file = `<!doctype html>
 <html>
     <head></head>
     <body>
-        <h1>${Message}</h1>
+        <h1>Sample File</h1>
+        <h2> -- </h2>
         <script type="module">
             import Reloader from "/hmr";
             import * as I from "/project/test.tsx";
-            Reloader("reload-complete", ()=>
-            {
-                console.log(I.default);
-            })
+            const updateTitle =()=> document.querySelector("h2").innerHTML = I.default;
+            updateTitle();
+            Reloader("reload-complete", updateTitle);
         </script>
     </body>
 </html>`;
@@ -26,28 +25,19 @@ const proxy = async(inModule:string)=>
     return `
 import * as Import from "${inModule}?reload=0";
 import Reloader from "/hmr";
-${ members.map(m=>`let proxy_${m} = Import.${m}; export { proxy_${m} as ${m} };`).join(`
-`) }
-
+${ members.map(m=>`let proxy_${m} = Import.${m}; export { proxy_${m} as ${m} };`).join(" ") }
 const reloadHandler = (updatedModule)=>
 {
-    ${ members.map(m=>`proxy_${m} = updatedModule.${m};`).join(`
-`) }
+    ${ members.map(m=>`proxy_${m} = updatedModule.${m};`).join(" ") }
 };
-
 Reloader("${inModule}", reloadHandler);`;
-
 };
 
 const hmr = `
-
 let reloads = 0;
 const socket = new WebSocket('ws://localhost:4422/');
 socket.addEventListener('message', (event) =>
 {
-    console.log('Message from server ', event.data);
-    console.log("looking for registered handlers for", event.data, "in", listeners.get(event.data));
-
     const members = listeners.get(event.data)??[];
     reloads++;
     Promise.all(
@@ -69,7 +59,6 @@ export default (path, handler)=>
     const members = listeners.get(path)??[];
     members.push(handler);
     listeners.set(path, members);
-    console.log("listener registered", path);
 };`;
 
 serve(

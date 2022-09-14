@@ -14,6 +14,7 @@ let Server:Deno.Process<Deno.RunOptions>|undefined;
 const ServerArgs:Deno.RunOptions = {cmd:["deno", "run", "-A", "--unstable", "underwatch.tsx"]};
 const ServerReboot =():void=>
 {
+    console.log("Overwatch: reloading HTTP server.")
     Server?.kill("SIGTERM");
     Server?.close();
     Server = Deno.run(ServerArgs);
@@ -34,32 +35,33 @@ Deno.serve({port:4422}, (inRequest)=>
       socket.onopen = () =>
       {
           Sockets.add(socket);
-          console.log("socket opened");
+          console.log("Overwatch: Socket created");
       };
       socket.onclose = () =>
       {
           Sockets.delete(socket);
-          console.log("socket closed");
+          console.log("Overwatch: Socket deleted");
       };
       socket.onmessage = (e) =>
       {
-        console.log("socket message:", e.data);
         if(e.data == "reload")
         {
             ServerReboot();
         }
       };
-      socket.onerror = (e) => console.log("socket errored:", e);
+      socket.onerror = (e) => console.log("Ovrwatch: Socket errored:", e);
+      console.log("Overwatch: WebSocket server loaded.")
       return response;
     }
     catch
     {
-      return new Response("request isn't trying to upgrade to websocket.");
+      return new Response("Overwatch: Not a websocket request.");
     }
 });
 
+
+const watcher = Deno.watchFs("project");
 localStorage.clear();
-const filesChanged:Map<string, string> = new Map();
 const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):Promise<string>=>
 {
     const ext = inFullProjectPath.substring(inFullProjectPath.lastIndexOf("."));
@@ -83,6 +85,7 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
         {
             localStorage.removeItem(webPath);
         }
+        console.log(`Overwatch: removed (${webPath})`);
         return webPath;
     }
 
@@ -129,36 +132,37 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
         if(checkFirst)
         {
             const code:string|false = await ReadFile(cachePath);
-            code ? WriteMemory(code, isTranspiled) : await WriteCacheAndMemory(inFullProjectPath, cachePath, isTranspiled);
+            if(code)
+            {
+                WriteMemory(code, isTranspiled);
+                console.log(`Overwatch: loaded from cache (${webPath})`);
+            }
+            else
+            {
+                await WriteCacheAndMemory(inFullProjectPath, cachePath, isTranspiled);
+                console.log(`Overwatch: added to cache (${webPath})`);
+            }
         }
         else
         {
             await WriteCacheAndMemory(inFullProjectPath, cachePath, isTranspiled);
+            console.log(`Overwatch: updated cache of (${webPath})`);
         }
     }
     else
     {
-        const code = await ReadFile(inFullProjectPath);
+        const code:string|false = await ReadFile(inFullProjectPath);
         if(code)
         {
-            WriteMemory(code, isTranspiled)
+            WriteMemory(code, isTranspiled);
+            console.log(`Overwatch: basic file added (${webPath})`);
         }
     }
-
+    
     return webPath;
 
-}
-// WALKER | To initialize the program: process all project files.
-// - look in project/, find the equivalent in the cache, and push things into Memory
-for await (const entry of walk(dirCWD+"\\project", {includeDirs:false}))
-{
-    console.log("Walker", entry.path);
-    await XPile(entry.path, true);
-}
-console.log(localStorage);
-// WATCHER | As the program runs, process individual files as they are changed.
-// - look in project/ and push things into Memory *and* .cached/
-const watcher = Deno.watchFs("project");
+};
+const filesChanged:Map<string, string> = new Map();
 const ProcessFiles =debounce(async()=>
 {
     for await (const [file, action] of filesChanged)
@@ -175,11 +179,14 @@ const ProcessFiles =debounce(async()=>
     }
     filesChanged.clear();
 }, 500);
+for await (const entry of walk(dirCWD+"\\project", {includeDirs:false}))
+{
+    await XPile(entry.path, true);
+}
 for await (const event of watcher)
 {
     event.paths.forEach(path =>
     {
-        console.log("Watcher", path);
         filesChanged.set(path, event.kind);
     });
     ProcessFiles();
