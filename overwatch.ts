@@ -1,65 +1,126 @@
 import { debounce } from "https://deno.land/std@0.151.0/async/debounce.ts";
 import { walk } from "https://deno.land/std@0.155.0/fs/mod.ts";
+import { serve } from "https://deno.land/std@0.155.0/http/server.ts";
+
+
+const dirCWD = Deno.cwd(); console.log("Overwatch running at", dirCWD);
+
+// http and websocket server
+const Sockets:Set<WebSocket> = new Set();
+const SocketsBroadcast =(inData:string)=>
+{
+    for (const socket of Sockets){ socket.send(inData); }
+}
+serve((inRequest)=>
+{
+    const url = new URL(inRequest.url);
+        
+    if(url.pathname == "/favicon.ico")
+    {
+        return new Response("", {status:404});
+    }
+
+    if(url.pathname == "/")
+    {
+        return new Response(`<!doctype html>
+        <html>
+            <head></head>
+            <body>
+                <h1>Sample File</h1>
+                <h2> -- </h2>
+                <script type="module">
+                    import Reloader from "/hmr-source";
+                    import * as I from "/project/test.tsx";
+                    const updateTitle =()=> document.querySelector("h2").innerHTML = I.default;
+                    updateTitle();
+                    Reloader("reload-complete", updateTitle);
+                </script>
+            </body>
+        </html>`, {status:200, headers:{"content-type":"text/html"}});
+    }
+
+    if(url.pathname == "/hmr-source")
+    {
+        return new Response(`
+        let reloads = 0;
+        const socket = new WebSocket("ws://"+document.location.host+"/hmr-listen");
+        socket.addEventListener('message', (event) =>
+        {
+            const members = listeners.get(event.data)??[];
+            reloads++;
+            Promise.all(
+                members.map(m=>
+                {
+                    return import(event.data+"?reload="+reloads)
+                    .then(updatedModule=>m(updatedModule));
+                })
+            ).then(()=>
+            {
+                const members = listeners.get("reload-complete")??[];
+                members.forEach(m=>m());
+            });
+        });
+        
+        const listeners = new Map();
+        export default (path, handler)=>
+        {
+            const members = listeners.get(path)??[];
+            members.push(handler);
+            listeners.set(path, members);
+        };`, {status:200, headers:{"content-type":"application/javascript"}});
+    }
+
+    if(url.pathname == "/hmr-listen")
+    {
+        console.log("hmr listen caled..")
+        try
+        {
+          const { response, socket } = Deno.upgradeWebSocket(inRequest);
+          socket.onopen = () =>
+          {
+              Sockets.add(socket);
+              console.log("Overwatch: Socket created");
+          };
+          socket.onclose = () =>
+          {
+              Sockets.delete(socket);
+              console.log("Overwatch: Socket deleted");
+          };
+          socket.onmessage = (e) =>
+          {
+            if(e.data == "reload")
+            {
+                ServerReboot();
+            }
+          };
+          socket.onerror = (e) => console.log("Ovrwatch: Socket errored:", e);
+          console.log("Overwatch: WebSocket server loaded.")
+          return response;
+        }
+        catch
+        {
+          return new Response("Overwatch: Not a websocket request.");
+        }
+    }
+
+    if(url.searchParams.get("reload"))
+    {
+        console.log("serving updated module", url.pathname);
+        return new Response(localStorage.getItem(url.pathname), {status:200, headers:{"content-type":"application/javascript", "cache-control":"no-cache,no-save"}});
+    }
+    else
+    {
+        console.log("serving proxy for", url.pathname);
+        return new Response(localStorage.getItem(url.pathname+".pxy"), {status:200, headers:{"content-type":"application/javascript", "cache-control":"no-cache,no-save"}});
+    }
+}, {port:8000});
+
 
 export type MemoryFile = {
     xpiled?:string,
     source?:string,
     styles?:string,
 };
-
-const dirCWD = Deno.cwd(); console.log("Overwatch running at", dirCWD);
-
-// http server
-let Server:Deno.Process<Deno.RunOptions>|undefined;
-const ServerArgs:Deno.RunOptions = {cmd:["deno", "run", "-A", "--unstable", "underwatch.tsx"]};
-const ServerReboot =():void=>
-{
-    console.log("Overwatch: reloading HTTP server.")
-    Server?.kill("SIGTERM");
-    Server?.close();
-    Server = Deno.run(ServerArgs);
-};
-ServerReboot();
-
-// websocket server for HMR
-const Sockets:Set<WebSocket> = new Set();
-const SocketsBroadcast =(inData:string)=>
-{
-    for (const socket of Sockets){ socket.send(inData); }
-}
-Deno.serve({port:4422}, (inRequest)=>
-{
-    try
-    {
-      const { response, socket } = Deno.upgradeWebSocket(inRequest);
-      socket.onopen = () =>
-      {
-          Sockets.add(socket);
-          console.log("Overwatch: Socket created");
-      };
-      socket.onclose = () =>
-      {
-          Sockets.delete(socket);
-          console.log("Overwatch: Socket deleted");
-      };
-      socket.onmessage = (e) =>
-      {
-        if(e.data == "reload")
-        {
-            ServerReboot();
-        }
-      };
-      socket.onerror = (e) => console.log("Ovrwatch: Socket errored:", e);
-      console.log("Overwatch: WebSocket server loaded.")
-      return response;
-    }
-    catch
-    {
-      return new Response("Overwatch: Not a websocket request.");
-    }
-});
-
-
 const watcher = Deno.watchFs("project");
 localStorage.clear();
 const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):Promise<string>=>
@@ -80,6 +141,7 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
             await Deno.remove(cachePathMeta);
             localStorage.removeItem(webPath);
             localStorage.removeItem(webPath+".map");
+            localStorage.removeItem(webPath+".pxy");
         }
         else
         {
@@ -103,14 +165,17 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
         const process = Deno.run({cmd:["deno", "cache", `${inFullProjectPath}`]});
         await process.status();
     };
-    const WriteMemory =(code:string, isTranspiled:boolean)=>
+    const WriteMemory =async(code:string, isTranspiled:boolean):Promise<void>=>
     {
         if(isTranspiled)
         {
             const split = code.lastIndexOf("//# sourceMappingURL=");
-            const wentIn = code.substring(0, split)
+            const wentIn = code.substring(0, split);
+            const proxy = await HMRProxy(webPath);
+
             localStorage.setItem(webPath, wentIn);
             localStorage.setItem(webPath+".map", code.substring(split));
+            localStorage.setItem(webPath+".pxy", proxy);
         }
         else
         {
@@ -123,10 +188,24 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
         const code:string|false = await ReadFile(cachePath);
         if(code)
         {
-            WriteMemory(code, isTranspiled);
+            await WriteMemory(code, isTranspiled);
         }
     };
-    
+    const HMRProxy = async(inModule:string):Promise<string>=>
+    {
+        const imp = await import("."+inModule);
+        const members = [];
+        for( const key in imp ) { members.push(key); }
+        return `
+        import * as Import from "${inModule}?reload=0";
+        import Reloader from "/hmr-source";
+        ${ members.map(m=>`let proxy_${m} = Import.${m}; export { proxy_${m} as ${m} };`).join(" ") }
+        const reloadHandler = (updatedModule)=>{ ${ members.map(m=>`proxy_${m} = updatedModule.${m};`).join(" ") }};
+        Reloader("${inModule}", reloadHandler);`;
+    };
+
+
+
     if(isTranspiled)
     {
         if(checkFirst)
@@ -134,7 +213,7 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
             const code:string|false = await ReadFile(cachePath);
             if(code)
             {
-                WriteMemory(code, isTranspiled);
+                await WriteMemory(code, isTranspiled);
                 console.log(`Overwatch: loaded from cache (${webPath})`);
             }
             else
@@ -154,7 +233,7 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
         const code:string|false = await ReadFile(inFullProjectPath);
         if(code)
         {
-            WriteMemory(code, isTranspiled);
+            await WriteMemory(code, isTranspiled);
             console.log(`Overwatch: basic file added (${webPath})`);
         }
     }
