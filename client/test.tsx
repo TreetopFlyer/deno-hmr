@@ -1,6 +1,6 @@
 import React from "https://esm.sh/react@18.2.0";
 
-const CONST = "Subtitle";
+const CONST = "Subtitle!";
 
 export default CONST;
 

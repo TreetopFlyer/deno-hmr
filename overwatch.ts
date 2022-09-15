@@ -1,42 +1,26 @@
 import { debounce } from "https://deno.land/std@0.151.0/async/debounce.ts";
 import { walk } from "https://deno.land/std@0.155.0/fs/mod.ts";
 import { serve } from "https://deno.land/std@0.155.0/http/server.ts";
+import MIMELUT from "./mime.json" assert {type:"json"};
+
+const dirActive = Deno.cwd(); console.log("Overwatch running at", dirActive);
+const dirClient = "client";
+const dirStatic = "static";
 
 
-const dirCWD = Deno.cwd(); console.log("Overwatch running at", dirCWD);
-
-// http and websocket server
+/** WebSocket and HTTP Server ******************************************/
 const Sockets:Set<WebSocket> = new Set();
 const SocketsBroadcast =(inData:string)=>
 {
     for (const socket of Sockets){ socket.send(inData); }
 }
-serve((inRequest)=>
+serve(async(inRequest)=>
 {
     const url = new URL(inRequest.url);
         
     if(url.pathname == "/favicon.ico")
     {
         return new Response("", {status:404});
-    }
-
-    if(url.pathname == "/")
-    {
-        return new Response(`<!doctype html>
-        <html>
-            <head></head>
-            <body>
-                <h1>Sample File</h1>
-                <h2> -- </h2>
-                <script type="module">
-                    import Reloader from "/hmr-source";
-                    import * as I from "/project/test.tsx";
-                    const updateTitle =()=> document.querySelector("h2").innerHTML = I.default;
-                    updateTitle();
-                    Reloader("reload-complete", updateTitle);
-                </script>
-            </body>
-        </html>`, {status:200, headers:{"content-type":"text/html"}});
     }
 
     if(url.pathname == "/hmr-source")
@@ -72,7 +56,6 @@ serve((inRequest)=>
 
     if(url.pathname == "/hmr-listen")
     {
-        console.log("hmr listen caled..")
         try
         {
           const { response, socket } = Deno.upgradeWebSocket(inRequest);
@@ -86,15 +69,8 @@ serve((inRequest)=>
               Sockets.delete(socket);
               console.log("Overwatch: Socket deleted");
           };
-          socket.onmessage = (e) =>
-          {
-            if(e.data == "reload")
-            {
-                ServerReboot();
-            }
-          };
-          socket.onerror = (e) => console.log("Ovrwatch: Socket errored:", e);
-          console.log("Overwatch: WebSocket server loaded.")
+          socket.onmessage = (e) => {};
+          socket.onerror = (e) => console.log("Overwatch: Socket errored:", e);
           return response;
         }
         catch
@@ -103,33 +79,70 @@ serve((inRequest)=>
         }
     }
 
-    if(url.searchParams.get("reload"))
+    if(url.pathname.startsWith("/"+dirClient))
     {
-        console.log("serving updated module", url.pathname);
-        return new Response(localStorage.getItem(url.pathname), {status:200, headers:{"content-type":"application/javascript", "cache-control":"no-cache,no-save"}});
+        const endsWith = url.pathname.substring(url.pathname.lastIndexOf("."));
+        if(endsWith == ".tsx" || endsWith == ".ts" || endsWith == ".jsx")
+        {
+            if(url.searchParams.get("reload"))
+            {
+                console.log("serving updated module", url.pathname);
+                return new Response(localStorage.getItem(url.pathname), {status:200, headers:{"content-type":"application/javascript", "cache-control":"no-cache,no-save"}});
+            }
+            else
+            {
+                console.log("serving proxy for", url.pathname);
+                return new Response(localStorage.getItem(url.pathname+".pxy"), {status:200, headers:{"content-type":"application/javascript", "cache-control":"no-cache,no-save"}});
+            }
+        }
+        else
+        {
+            return new Response(localStorage.getItem(url.pathname), {status:200, headers:{"content-type":"application/javascript", "cache-control":"no-cache,no-save"}});
+        }
     }
-    else
+
+    if(url.pathname.startsWith("/"+dirStatic))
     {
-        console.log("serving proxy for", url.pathname);
-        return new Response(localStorage.getItem(url.pathname+".pxy"), {status:200, headers:{"content-type":"application/javascript", "cache-control":"no-cache,no-save"}});
+        const text = await Deno.open("./"+url.pathname);
+        const ext:string = url.pathname.substring(url.pathname.lastIndexOf(".")) ?? "";
+        const type = (MIMELUT as {[key:string]:string})[ext] ?? "application/javascript";
+        return new Response(text.readable, {status:200, headers:{"content-type": `${type}; charset=utf-8`}});
     }
+
+    return new Response(`<!doctype html>
+    <html>
+        <head></head>
+        <body>
+            <h1>Sample File</h1>
+            <h2> -- </h2>
+            <script type="module">
+                import Reloader from "/hmr-source";
+                import * as I from "/client/test.tsx";
+                const updateTitle =()=> document.querySelector("h2").innerHTML = I.default;
+                updateTitle();
+                Reloader("reload-complete", updateTitle);
+            </script>
+        </body>
+    </html>`, {status:200, headers:{"content-type":"text/html"}});
+
 }, {port:8000});
 
 
+/** File System Launcher/Watcher ******************************************/
 export type MemoryFile = {
     xpiled?:string,
     source?:string,
     styles?:string,
 };
-const watcher = Deno.watchFs("project");
+const watcher = Deno.watchFs(dirClient);
 localStorage.clear();
 const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):Promise<string>=>
 {
     const ext = inFullProjectPath.substring(inFullProjectPath.lastIndexOf("."));
-    const cachePathBase = dirCWD + "\\.cached\\gen\\file\\" + inFullProjectPath.replace(":", "");
+    const cachePathBase = dirActive + "\\.cached\\gen\\file\\" + inFullProjectPath.replace(":", "");
     const cachePath = cachePathBase+".js";
     
-    const webPath = inFullProjectPath.substring(dirCWD.length).replaceAll("\\", "/");
+    const webPath = inFullProjectPath.substring(dirActive.length).replaceAll("\\", "/");
     const isTranspiled = (ext == ".ts" || ext == ".tsx" || ext == ".jsx");
 
     if(deletion)
@@ -241,6 +254,10 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
     return webPath;
 
 };
+for await (const entry of walk(dirActive+"\\"+dirClient, {includeDirs:false}))
+{
+    await XPile(entry.path, true);
+}
 const filesChanged:Map<string, string> = new Map();
 const ProcessFiles =debounce(async()=>
 {
@@ -257,16 +274,9 @@ const ProcessFiles =debounce(async()=>
         }
     }
     filesChanged.clear();
-}, 500);
-for await (const entry of walk(dirCWD+"\\project", {includeDirs:false}))
-{
-    await XPile(entry.path, true);
-}
+}, 2000);
 for await (const event of watcher)
 {
-    event.paths.forEach(path =>
-    {
-        filesChanged.set(path, event.kind);
-    });
+    event.paths.forEach( path => filesChanged.set(path, event.kind) );
     ProcessFiles();
 }
