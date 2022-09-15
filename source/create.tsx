@@ -1,11 +1,134 @@
+import React from "react";
+import ReactDOMServer from "react-dom/server";
 import { debounce } from "https://deno.land/std@0.151.0/async/debounce.ts";
 import { walk } from "https://deno.land/std@0.155.0/fs/mod.ts";
 import { serve } from "https://deno.land/std@0.155.0/http/server.ts";
 import MIMELUT from "./mime.json" assert {type:"json"};
 
-const dirActive = Deno.cwd(); console.log("Overwatch running at", dirActive);
-const dirClient = "client";
-const dirStatic = "static";
+import * as ESBuild from "https://deno.land/x/esbuild@v0.14.45/mod.js";
+import * as Twind from "https://esm.sh/twind";
+import * as TwindServer from "https://esm.sh/twind/shim/server";
+import { type State, PathParse, IsoProvider } from "./client.tsx";
+
+export type MemoryFile = {
+    xpiled?:string,
+    source?:string,
+    styles?:string,
+};
+
+const options = {
+    Themed: "twind.ts",
+    Source: "source",
+    Static: "static",
+    Client: "client",
+    Launch: "App.tsx",
+    Import: "imports.json",
+    Deploy: 3333,
+    Active: Deno.cwd(),
+};
+for(let i=0; i<Deno.args.length; i++)
+{
+    const arg = Deno.args[i];
+    if(arg.startsWith("--"))
+    {
+        const [key, value] = arg.split("=");
+             if(key == "--source"){ options.Source = value; }
+        else if(key == "--static"){ options.Static = value; }
+        else if(key == "--client"){ options.Client = value; }
+        else if(key == "--launch"){ options.Launch = value; }
+        else if(key == "--import"){ options.Import = value; }
+        else if(key == "--themed"){ options.Themed = value; }
+        else if(key == "--deploy"){ options.Deploy = parseInt(value); }
+    }
+}
+
+try { options.Import = await Deno.readTextFile(options.Import); }
+catch(e) { console.log(`Amber Start: (ERROR) Import map "${options.Import}" not found`); }
+console.log("Overwatch running at", options.Active);
+
+/** React Components ******************************************/
+// load App and Shell
+let App = ()=>null;
+let Shell =({isoModel, styles, importMap, bake, appPath}:{isoModel:State, styles:string, importMap:string, bake:string, appPath:string})=>
+{
+    return <html>
+        <head>
+            <title>{isoModel.Meta.Title??""}</title>
+            <link rel="canonical" href={isoModel.Path.Parts.join("/")}></link>
+            <link rel="icon" type="image/x-icon" href="/static/favicon.ico"></link>
+            <meta name="viewport" content="width=device-width, initial-scale=1"/>
+            <meta name="description" content={isoModel.Meta.Description??""}/>
+            <style id="tw-main" dangerouslySetInnerHTML={{__html:styles}}/>
+            <style id="tw-hmr"  dangerouslySetInnerHTML={{__html:FilesParse["client/rebuild.css"]??""}}/>
+            
+            <script type="importmap" dangerouslySetInnerHTML={{__html:importMap}}/>
+        </head>
+        <body>
+            <div id="app" dangerouslySetInnerHTML={{__html:bake}}></div>
+            <script type="module" dangerouslySetInnerHTML={{__html:
+    `import {createElement as h} from "react";
+    import {hydrateRoot, createRoot} from "react-dom/client";
+    import App from "./${clientFolder}${launchFile}";
+    import { IsoProvider } from "amber";
+    
+    const iso = ${JSON.stringify(isoModel)};      
+    const dom = document.querySelector("#app");
+    const app = h(IsoProvider, {seed:iso}, h(App));
+    const url = new URL(location.href);
+
+    if(url.searchParams.has("no-hydrate"))
+    {
+        console.log("NOT hydrating");
+        createRoot(dom).render(app);
+    }
+    else
+    {
+        console.log("hydrating");
+        hydrateRoot(dom, app);
+    }
+
+    const socket = new WebSocket('ws://'+url.host+'/hmr');
+    socket.addEventListener('message', (event) =>
+    {
+        console.log('Message from server ', event.data);
+        url.searchParams.set("no-hydrate", "true");
+        location.search = url.searchParams.toString();
+        location.reload();
+    });
+
+    `}}/>
+        </body>
+    </html>;
+}
+
+const appPath = `file://${options.Active}/${options.Client}/${options.Launch}`;
+try
+{
+    const appImport = await import(appPath);
+    App = appImport.default;
+    if(appImport.Shell)
+    {
+        Shell = appImport.Shell;
+    }
+}
+catch(e) { console.log(e); console.log(`Launch file "${options.Launch}" cound not be found in Client directory "${appPath}".`); }
+
+const SSR =async(inURL:URL):Promise<ReactDOMServer.ReactDOMServerReadableStream>=>
+{
+    const isoModel:State = { Meta:{}, Data:{}, Path:PathParse(url), Client:false, Queue:[] }
+    let bake = ReactDOMServer.renderToString(<IsoProvider seed={isoModel}><App/></IsoProvider>);
+    let count = 0;
+    while(isoModel.Queue.length)
+    {
+        count ++;
+        if(count > 5) { break; }
+        await Promise.all(isoModel.Queue);
+        isoModel.Queue = [];
+        bake = ReactDOMServer.renderToString(<IsoProvider seed={isoModel}><App/></IsoProvider>);
+    }
+    isoModel.Client = true;
+    return await ReactDOMServer.renderToReadableStream(<Shell isoModel={isoModel} styles={""} importMap={options.Import} bake={bake} appPath={`./${options.Client}/${options.Launch}`} />);
+};
 
 
 /** WebSocket and HTTP Server ******************************************/
@@ -79,7 +202,7 @@ serve(async(inRequest)=>
         }
     }
 
-    if(url.pathname.startsWith("/"+dirClient))
+    if(url.pathname.startsWith("/"+options.Client))
     {
         const endsWith = url.pathname.substring(url.pathname.lastIndexOf("."));
         if(endsWith == ".tsx" || endsWith == ".ts" || endsWith == ".jsx")
@@ -101,7 +224,7 @@ serve(async(inRequest)=>
         }
     }
 
-    if(url.pathname.startsWith("/"+dirStatic))
+    if(url.pathname.startsWith("/"+options.Static))
     {
         const text = await Deno.open("./"+url.pathname);
         const ext:string = url.pathname.substring(url.pathname.lastIndexOf(".")) ?? "";
@@ -129,20 +252,16 @@ serve(async(inRequest)=>
 
 
 /** File System Launcher/Watcher ******************************************/
-export type MemoryFile = {
-    xpiled?:string,
-    source?:string,
-    styles?:string,
-};
-const watcher = Deno.watchFs(dirClient);
+
+const watcher = Deno.watchFs(options.Client);
 localStorage.clear();
 const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):Promise<string>=>
 {
     const ext = inFullProjectPath.substring(inFullProjectPath.lastIndexOf("."));
-    const cachePathBase = dirActive + "\\.cached\\gen\\file\\" + inFullProjectPath.replace(":", "");
+    const cachePathBase = options.Active + "\\.cached\\gen\\file\\" + inFullProjectPath.replace(":", "");
     const cachePath = cachePathBase+".js";
     
-    const webPath = inFullProjectPath.substring(dirActive.length).replaceAll("\\", "/");
+    const webPath = inFullProjectPath.substring(options.Active.length).replaceAll("\\", "/");
     const isTranspiled = (ext == ".ts" || ext == ".tsx" || ext == ".jsx");
 
     if(deletion)
@@ -206,7 +325,7 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
     };
     const HMRProxy = async(inModule:string):Promise<string>=>
     {
-        const imp = await import("."+inModule);
+        const imp = await import("file://"+options.Active+inModule);
         const members = [];
         for( const key in imp ) { members.push(key); }
         return `
@@ -254,7 +373,7 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
     return webPath;
 
 };
-for await (const entry of walk(dirActive+"\\"+dirClient, {includeDirs:false}))
+for await (const entry of walk(options.Active+"\\"+options.Client, {includeDirs:false}))
 {
     await XPile(entry.path, true);
 }
