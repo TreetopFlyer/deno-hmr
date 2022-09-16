@@ -74,7 +74,17 @@ let Shell =({isoModel, styles, importMap, bake, appPath}:{isoModel:State, styles
     const app = h(IsoProvider, {seed:iso}, h(App));
     const url = new URL(location.href);
 
-    
+    hydrateRoot(dom, app);
+
+    import Reloader from "/hmr-source";
+    const root = createRoot(dom);
+    Reloader("reload-complete", ()=>
+    {
+        console.log("reload handler called in browser", root);
+        //root.render(app);
+        window.location.search="?reload="+Math.random();
+    });
+
 
     `}}/>
         </body>
@@ -115,6 +125,7 @@ const SSR =async(inURL:URL):Promise<ReactDOMServer.ReactDOMServerReadableStream>
 const Sockets:Set<WebSocket> = new Set();
 const SocketsBroadcast =(inData:string)=>
 {
+    console.log("Broadcasting", inData);
     for (const socket of Sockets){ socket.send(inData); }
 }
 serve(async(inRequest)=>
@@ -219,6 +230,7 @@ serve(async(inRequest)=>
 
 
 /** File System Launcher/Watcher ******************************************/
+
 localStorage.clear();
 const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):Promise<string>=>
 {
@@ -228,6 +240,8 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
     
     const webPath = inFullProjectPath.substring(options.Active.length).replaceAll("\\", "/");
     const isTranspiled = (ext == ".ts" || ext == ".tsx" || ext == ".jsx");
+
+    console.log("xpile started.....", webPath);
 
     if(deletion)
     {
@@ -335,17 +349,15 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
         }
     }
     
+    console.log("xpile done!", webPath);
     return webPath;
-
 };
+
 for await (const entry of walk(options.Active+"\\"+options.Client, {includeDirs:false}))
 {
     await XPile(entry.path, true);
 }
-for await (const entry of walk(options.Active+"\\"+options.Source, {includeDirs:false}))
-{
-    await XPile(entry.path);
-}
+await XPile(options.Active+"\\"+options.Source+"\\client.tsx", true);
 
 const filesChanged:Map<string, string> = new Map();
 const ProcessFiles =debounce(async()=>
@@ -363,10 +375,12 @@ const ProcessFiles =debounce(async()=>
         }
     }
     filesChanged.clear();
-}, 2000);
+}, 500);
+
 const watcher = Deno.watchFs(options.Client);
 for await (const event of watcher)
 {
+    console.log("watch event", event);
     event.paths.forEach( path => filesChanged.set(path, event.kind) );
     ProcessFiles();
 }

@@ -30,7 +30,24 @@ const Reducer =(inState:State, inAction:Actions)=>
     switch(inAction.type)
     {
         case "PathReplace" :
-            output = {...inState, Path:{...inState.Path, Parts:inAction.payload.Parts}};
+            output =
+            {
+                ...inState,
+                Path:
+                {
+                    ...inState.Path,
+                    Parts:
+                    [
+                        ...inAction.payload.Parts
+                    ],
+                    Query:
+                    {
+                        ...inState.Path.Query,
+                        ...inAction.payload.Query
+                    }
+                }
+            };
+            console.log("Path update", output);
             break;
         case "MetaReplace" :
             output = {...inState, Meta:inAction.payload};
@@ -132,9 +149,13 @@ const Effects =()=>
         {
             const NavigationHandler = (e:NavigationEvent) =>
             {
+                
                 if(e.navigationType !== "reload")
                 {
-                    e.transitionWhile( routeSet(PathParse(new URL(e.destination.url))) );
+                    const u = new URL(e.destination.url);
+                    const p = PathParse(u);
+                    console.log("NAV EVENT", p);
+                    e.transitionWhile( routeSet(p) );
                 }
             };
             navigation.addEventListener("navigate", NavigationHandler);

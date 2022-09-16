@@ -34,6 +34,8 @@ export default ()=>
 
     return <div className="p-2 border">
     <p className="p-4 border">current route: {folder}</p>
+    <p className="p-4 border">current query: {JSON.stringify(routeGet.Query)}</p>
+
     <nav>
         <a className={`text-white p-2 ${highlight("")}`} href="/">Home</a>
         <a className={`text-white p-2 ${highlight("about")}`} href="/about">About</a>
