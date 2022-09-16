@@ -55,11 +55,9 @@ let Shell =({isoModel, styles, importMap, bake, appPath}:{isoModel:State, styles
         <head>
             <title>{isoModel.Meta.Title??""}</title>
             <link rel="canonical" href={isoModel.Path.Parts.join("/")}></link>
-            <link rel="icon" type="image/x-icon" href="/static/favicon.ico"></link>
             <meta name="viewport" content="width=device-width, initial-scale=1"/>
             <meta name="description" content={isoModel.Meta.Description??""}/>
             <style id="tw-main" dangerouslySetInnerHTML={{__html:styles}}/>
-            <style id="tw-hmr"  dangerouslySetInnerHTML={{__html:FilesParse["client/rebuild.css"]??""}}/>
             
             <script type="importmap" dangerouslySetInnerHTML={{__html:importMap}}/>
         </head>
@@ -68,7 +66,7 @@ let Shell =({isoModel, styles, importMap, bake, appPath}:{isoModel:State, styles
             <script type="module" dangerouslySetInnerHTML={{__html:
     `import {createElement as h} from "react";
     import {hydrateRoot, createRoot} from "react-dom/client";
-    import App from "./${clientFolder}${launchFile}";
+    import App from "./${appPath}";
     import { IsoProvider } from "amber";
     
     const iso = ${JSON.stringify(isoModel)};      
@@ -76,25 +74,7 @@ let Shell =({isoModel, styles, importMap, bake, appPath}:{isoModel:State, styles
     const app = h(IsoProvider, {seed:iso}, h(App));
     const url = new URL(location.href);
 
-    if(url.searchParams.has("no-hydrate"))
-    {
-        console.log("NOT hydrating");
-        createRoot(dom).render(app);
-    }
-    else
-    {
-        console.log("hydrating");
-        hydrateRoot(dom, app);
-    }
-
-    const socket = new WebSocket('ws://'+url.host+'/hmr');
-    socket.addEventListener('message', (event) =>
-    {
-        console.log('Message from server ', event.data);
-        url.searchParams.set("no-hydrate", "true");
-        location.search = url.searchParams.toString();
-        location.reload();
-    });
+    
 
     `}}/>
         </body>
@@ -115,7 +95,7 @@ catch(e) { console.log(e); console.log(`Launch file "${options.Launch}" cound no
 
 const SSR =async(inURL:URL):Promise<ReactDOMServer.ReactDOMServerReadableStream>=>
 {
-    const isoModel:State = { Meta:{}, Data:{}, Path:PathParse(url), Client:false, Queue:[] }
+    const isoModel:State = { Meta:{}, Data:{}, Path:PathParse(inURL), Client:false, Queue:[] }
     let bake = ReactDOMServer.renderToString(<IsoProvider seed={isoModel}><App/></IsoProvider>);
     let count = 0;
     while(isoModel.Queue.length)
@@ -127,7 +107,7 @@ const SSR =async(inURL:URL):Promise<ReactDOMServer.ReactDOMServerReadableStream>
         bake = ReactDOMServer.renderToString(<IsoProvider seed={isoModel}><App/></IsoProvider>);
     }
     isoModel.Client = true;
-    return await ReactDOMServer.renderToReadableStream(<Shell isoModel={isoModel} styles={""} importMap={options.Import} bake={bake} appPath={`./${options.Client}/${options.Launch}`} />);
+    return ReactDOMServer.renderToReadableStream(<Shell isoModel={isoModel} styles={""} importMap={options.Import} bake={bake} appPath={`./${options.Client}/${options.Launch}`} />);
 };
 
 
@@ -202,7 +182,7 @@ serve(async(inRequest)=>
         }
     }
 
-    if(url.pathname.startsWith("/"+options.Client))
+    if(url.pathname.startsWith("/"+options.Client) || url.pathname.startsWith("/"+options.Source) )
     {
         const endsWith = url.pathname.substring(url.pathname.lastIndexOf("."));
         if(endsWith == ".tsx" || endsWith == ".ts" || endsWith == ".jsx")
@@ -232,28 +212,13 @@ serve(async(inRequest)=>
         return new Response(text.readable, {status:200, headers:{"content-type": `${type}; charset=utf-8`}});
     }
 
-    return new Response(`<!doctype html>
-    <html>
-        <head></head>
-        <body>
-            <h1>Sample File</h1>
-            <h2> -- </h2>
-            <script type="module">
-                import Reloader from "/hmr-source";
-                import * as I from "/client/test.tsx";
-                const updateTitle =()=> document.querySelector("h2").innerHTML = I.default;
-                updateTitle();
-                Reloader("reload-complete", updateTitle);
-            </script>
-        </body>
-    </html>`, {status:200, headers:{"content-type":"text/html"}});
+    const rendered = await SSR(url);
+    return new Response(rendered, {status:200, headers:{"content-type":"text/html"}});
 
 }, {port:8000});
 
 
 /** File System Launcher/Watcher ******************************************/
-
-const watcher = Deno.watchFs(options.Client);
 localStorage.clear();
 const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):Promise<string>=>
 {
@@ -377,6 +342,11 @@ for await (const entry of walk(options.Active+"\\"+options.Client, {includeDirs:
 {
     await XPile(entry.path, true);
 }
+for await (const entry of walk(options.Active+"\\"+options.Source, {includeDirs:false}))
+{
+    await XPile(entry.path);
+}
+
 const filesChanged:Map<string, string> = new Map();
 const ProcessFiles =debounce(async()=>
 {
@@ -394,6 +364,7 @@ const ProcessFiles =debounce(async()=>
     }
     filesChanged.clear();
 }, 2000);
+const watcher = Deno.watchFs(options.Client);
 for await (const event of watcher)
 {
     event.paths.forEach( path => filesChanged.set(path, event.kind) );
