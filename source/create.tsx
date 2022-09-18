@@ -42,8 +42,17 @@ for(let i=0; i<Deno.args.length; i++)
     }
 }
 
-try { options.Import = await Deno.readTextFile(options.Import); }
+try
+{
+    options.Import = await Deno.readTextFile(options.Import);
+    const parsed = JSON.parse(options.Import);
+    console.log("before:", parsed);
+    parsed["imports"]["react"] = "./client/hmr-react-proxy.js";
+    options.Import = JSON.stringify(parsed);
+    console.log("after:", options.Import);
+}
 catch(e) { console.log(`Amber Start: (ERROR) Import map "${options.Import}" not found`); }
+
 console.log("Overwatch running at", options.Active);
 
 /** React Components ******************************************/
@@ -59,7 +68,7 @@ let Shell =({isoModel, styles, importMap, bake, appPath}:{isoModel:State, styles
             <meta name="description" content={isoModel.Meta.Description??""}/>
             <style id="tw-main" dangerouslySetInnerHTML={{__html:styles}}/>
             
-            <script type="importmap" dangerouslySetInnerHTML={{__html:importMap}}/>
+            <script type="importmap" dangerouslySetInnerHTML={{__html:importMap}} />
         </head>
         <body>
             <div id="app" dangerouslySetInnerHTML={{__html:bake}}></div>
@@ -68,59 +77,8 @@ let Shell =({isoModel, styles, importMap, bake, appPath}:{isoModel:State, styles
     import {hydrateRoot, createRoot} from "react-dom/client";
     import App from "./${appPath}";
     import { IsoProvider } from "amber";
+    import Reloader from "/hmr-source";
     
-
-//////////////////////////
-window.Setters = [];
-window.addSetter =(inSetter, inValue)=>
-{
-    for(let i=0; i<window.Setters.length; i++)
-    {
-        let cur = window.Setters[i];
-        if(cur.setter == inSetter)
-        {
-            cur.getter = inValue;
-            if(cur.pinged)
-            {
-                cur.pinged = false;
-                cur.render = new Date().getTime();
-                console.log("ping has completed!", cur);
-            }
-            return;
-        }
-    }
-    window.Setters.push({ setter:inSetter, getter:inValue, render:new Date().getTime(), pinged:false });
-};
-window.pingSetter =(inIndex)=>
-{
-    let state = window.Setters[inIndex];
-    state.pinged = true;
-    const recall = ()=>{state.setter(state.recall)};
-    state.setter(Math.random());
-    setTimeout(recall);
-};
-window.massInvoke =()=>
-{
-    window.Setters.forEach((s, i)=>window.pingSetter(i) )
-};
-
-let pointerUseState = React.useState;
-function spyUseState(_)
-{
-    const [stateGet, stateSet] = pointerUseState(_);
-
-    addSetter(stateSet, stateGet);
-    function spyStateSet(v)
-    {
-        stateSet(v);
-        addSetter(stateSet, v);
-        console.log("stateSet", stateSet);
-    }
-    return [stateGet, spyStateSet];
-}
-React.useState = spyUseState;
-//////////////////////////
-
     const iso = ${JSON.stringify(isoModel)};      
     const dom = document.querySelector("#app");
     const app = h(IsoProvider, {seed:iso}, h(App));
@@ -128,17 +86,10 @@ React.useState = spyUseState;
 
     hydrateRoot(dom, app);
 
-    import Reloader from "/hmr-source";
-    const root = createRoot(dom);
     Reloader("reload-complete", ()=>
     {
-        console.log("reload handler called in browser", root);
-        //root.render(app);
-        window.location.search="?reload="+Math.random();
-        window.massInvoke();
+        window.HMR.update();
     });
-
-
     `}}/>
         </body>
     </html>;
