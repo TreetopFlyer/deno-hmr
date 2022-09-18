@@ -46,10 +46,9 @@ try
 {
     options.Import = await Deno.readTextFile(options.Import);
     const parsed = JSON.parse(options.Import);
-    console.log("before:", parsed);
-    parsed["imports"]["react"] = "./client/hmr-react-proxy.js";
+    parsed["imports"]["react-alias"] = parsed["imports"]["react"];
+    parsed["imports"]["react"] = "/hmr-react-proxy";
     options.Import = JSON.stringify(parsed);
-    console.log("after:", options.Import);
 }
 catch(e) { console.log(`Amber Start: (ERROR) Import map "${options.Import}" not found`); }
 
@@ -86,10 +85,7 @@ let Shell =({isoModel, styles, importMap, bake, appPath}:{isoModel:State, styles
 
     hydrateRoot(dom, app);
 
-    Reloader("reload-complete", ()=>
-    {
-        window.HMR.update();
-    });
+    Reloader("reload-complete", window.HMR.update);
     `}}/>
         </body>
     </html>;
@@ -170,6 +166,45 @@ serve(async(inRequest)=>
             members.push(handler);
             listeners.set(path, members);
         };`, {status:200, headers:{"content-type":"application/javascript"}});
+    }
+
+    if(url.pathname == "/hmr-react-proxy")
+    {
+        return new Response(`
+        import * as ReactParts from "react-alias";
+
+        window.HMR = { registered:new Map() };
+        window.HMR.onChange =(key, value)=>
+        {
+            console.log("handler registered");
+            window.HMR.registered.set(key, value);
+        };
+        window.HMR.update =()=>
+        {
+            const keys = [];
+            for(const [key, value] of window.HMR.registered){ keys.push(key); }
+            window.HMR.registered.clear();
+            keys.forEach(k=>k());
+        };
+        
+        const ProxyElement =(props)=>
+        {
+            const [stateGet, stateSet] = ReactParts.useState(0);
+            ReactParts.useEffect(()=>window.HMR.onChange( ()=>stateSet(stateGet+1), "yep" ));
+        
+            return ReactParts.createElement(props.children.type, {...props.children.props, _proxy:Math.random()})
+        };
+        
+        const ProxyCreate =(...args)=>
+        {
+            console.log("proxy createElement!", typeof args[0] != "string");
+            const el = ReactParts.createElement(...args)
+            return typeof args[0] != "string" ? ReactParts.createElement(ProxyElement, null, el) : el;
+        };
+        
+        export * from "react-alias";
+        export default ReactParts.default;
+        export { ProxyCreate as createElement };`, {status:200, headers:{"content-type":"application/javascript"}});
     }
 
     if(url.pathname == "/hmr-listen")
