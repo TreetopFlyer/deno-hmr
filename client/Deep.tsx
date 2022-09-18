@@ -26,15 +26,12 @@ const Search = React.lazy(()=>import("./Search.tsx"));
 export default ()=>
 {
     const [routeGet] = useRoute();
-
     const [stateGet, stateSet] = React.useState(4);
 
     const folder = routeGet.Parts.length ? routeGet.Parts[0] : "";
     const status = useFetch("https://catfact.ninja/fact");
-
     const highlight =(inPath:string)=> folder == inPath ? "bg-green-500" : "bg-black";
 
-    console.log("Deep Render");
     return <div className="p-2 border">
     <h1 className="p-4 border">current route: {folder}</h1>
     <p className="p-4 border" onClick={e=>stateSet(stateGet+1)}>current 5??: {JSON.stringify(routeGet.Query)}</p>

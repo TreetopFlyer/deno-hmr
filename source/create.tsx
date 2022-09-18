@@ -17,7 +17,7 @@ export type MemoryFile = {
 };
 
 const options = {
-    Themed: "twind.ts",
+    Themed: "twind.tsx",
     Source: "source",
     Static: "static",
     Client: "client",
@@ -54,6 +54,21 @@ catch(e) { console.log(`Amber Start: (ERROR) Import map "${options.Import}" not 
 
 console.log("Overwatch running at", options.Active);
 
+let TwindConfig = {theme:{}, plugins:{}};
+try
+{
+    const twindImport = await import(`file://${options.Active}/${options.Themed}`);
+    if(twindImport.default)
+    {
+        TwindConfig = twindImport.default;
+    }
+    else
+    {
+        console.log("no twind theme provided");
+    }
+}
+catch { console.log(`error loading twind config "${options.Themed}" `) }
+
 /** React Components ******************************************/
 // load App and Shell
 let App = ()=>null;
@@ -66,7 +81,6 @@ let Shell =({isoModel, styles, importMap, bake, appPath}:{isoModel:State, styles
             <meta name="viewport" content="width=device-width, initial-scale=1"/>
             <meta name="description" content={isoModel.Meta.Description??""}/>
             <style id="tw-main" dangerouslySetInnerHTML={{__html:styles}}/>
-            
             <script type="importmap" dangerouslySetInnerHTML={{__html:importMap}} />
         </head>
         <body>
@@ -77,7 +91,9 @@ let Shell =({isoModel, styles, importMap, bake, appPath}:{isoModel:State, styles
     import App from "./${appPath}";
     import { IsoProvider } from "amber";
     import Reloader from "/hmr-source";
-    
+    import { setup } from "https://esm.sh/twind@0.16.17/shim";
+    setup(${JSON.stringify(TwindConfig)})
+
     const iso = ${JSON.stringify(isoModel)};      
     const dom = document.querySelector("#app");
     const app = h(IsoProvider, {seed:iso}, h(App));
@@ -176,7 +192,6 @@ serve(async(inRequest)=>
         window.HMR = { registered:new Map() };
         window.HMR.onChange =(key, value)=>
         {
-            console.log("handler registered");
             window.HMR.registered.set(key, value);
         };
         window.HMR.update =()=>
@@ -197,7 +212,6 @@ serve(async(inRequest)=>
         
         const ProxyCreate =(...args)=>
         {
-            console.log("proxy createElement!", typeof args[0] != "string");
             const el = ReactParts.createElement(...args)
             return typeof args[0] != "string" ? ReactParts.createElement(ProxyElement, null, el) : el;
         };
