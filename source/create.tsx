@@ -286,7 +286,7 @@ const FileRoutes = options.Server ?
         if(Util.JavaScript(ext))
         {
             /// Create Mode: this logic is for providing "proxied" modules
-            if(url.searchParams.get("reload"))
+            if(url.searchParams.get("reload") || url.pathname == RoutePaths.Amber)
             {
                 console.log("serving updated module", url.pathname);
                 return new Response(localStorage.getItem(url.pathname), {status:200, headers:{"content-type":"application/javascript", "cache-control":"no-cache,no-save"}});
@@ -423,7 +423,13 @@ for await (const entry of walk(options.Active+"\\"+options.Client, {includeDirs:
 {
     await XPile(entry.path, true);
 }
-await XPile(options.Active+RoutePaths.Amber, true);
+
+// import the Amber client from a potentially remote location and transpile it
+const path = import.meta.url.split("/").slice(0, -2).join("/")+RoutePaths.Amber;
+const amberClientFetch = await fetch(path);
+const amberClientText = await amberClientFetch.text();
+const amberClientParsed = await ESBuild.transform(amberClientText, {loader:"tsx", minify:true});
+localStorage.setItem(RoutePaths.Amber, amberClientParsed.code);
 
 if(!options.Server)
 {
