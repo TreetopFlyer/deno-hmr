@@ -1,6 +1,12 @@
 {
+    "importMap": "./imports.json",
     "tasks":
     {
-        "go": "DENO_DIR=./.cached deno run -A --unstable overwatch.ts"
+        "create": "deno run -A --unstable source/create.tsx",
+        "server": "deno run -A --unstable source/create.tsx --server",
+
+        "spoof-remote": "deno run -A -r source/spoof.tsx",
+        "create-remote": "deno run -A --import-map=imports-remote.json --unstable http://localhost:4444/source/create.tsx",
+        "server-remote": "deno run -A --import-map=imports-remote.json --unstable http://localhost:4444/source/create.tsx --server"
     }
 }
