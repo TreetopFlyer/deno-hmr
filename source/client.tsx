@@ -17,7 +17,7 @@ export type Actions
 
 export type IsoBinding = [State, React.Dispatch<Actions>];
 
-export type ShellComponent = (props:{isoModel:State, styles:string, shimSetup:string, importMap:string, bake:string, appPath:string})=>JSX.Element;
+export type ShellComponent = (props:{isoModel:State, styles:string, importMap:string, bake:string, init:string})=>JSX.Element;
 export type AppComponent = ()=>JSX.Element;
 
 const InitialState:State = {

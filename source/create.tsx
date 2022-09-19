@@ -55,7 +55,7 @@ const Loaded:LoadedResources =
     Import:{imports:{}},
     Launch:{
         App:()=><></>,
-        Shell:({isoModel, styles, shimSetup, importMap, bake, appPath})=>
+        Shell:({isoModel, styles, importMap, bake, init})=>
         {
             return <html>
                 <head>
@@ -68,27 +68,7 @@ const Loaded:LoadedResources =
                 </head>
                 <body>
                     <div id="app" dangerouslySetInnerHTML={{__html:bake}}></div>
-                    <script type="module" dangerouslySetInnerHTML={{__html:
-`import React, {createElement as h} from "react";
-import {hydrateRoot, createRoot} from "react-dom/client";
-import App from "${appPath}";
-import { IsoProvider } from "amber";
-
-const iso = ${JSON.stringify(isoModel)};      
-const dom = document.querySelector("#app");
-const app = h(IsoProvider, {seed:iso}, h(App));
-const url = new URL(location.href);
-
-/// Server Mode: hydrate server html
-//hydrateRoot(dom, app);
-
-/// Create Mode: client-side rendering and setup of twind
-import Reloader from "/hmr-source";
-Reloader("reload-complete", window.HMR.update);
-import { setup } from "https://esm.sh/twind@0.16.17/shim";
-setup(${shimSetup});
-createRoot(dom).render(app);
-`}}/>
+                    <script type="module" dangerouslySetInnerHTML={{__html:init}}/>
                 </body>
             </html>;
         }
@@ -114,9 +94,28 @@ export const ShortPaths = {
 };
 
 export const LitCode = {
-HMRInit:`
+
+HMRInit:(isoModel:State)=>`
+import React, {createElement as h} from "react";
+import {hydrateRoot, createRoot} from "react-dom/client";
+import App from "${ShortPaths.Launch}";
+import { IsoProvider } from "amber";
+
+const iso = ${JSON.stringify(isoModel)};      
+const dom = document.querySelector("#app");
+const app = h(IsoProvider, {seed:iso}, h(App));
+const url = new URL(location.href);
+
+/// Server Mode: hydrate server html
+//hydrateRoot(dom, app);
+
+/// Create Mode: client-side rendering and setup of twind
 import Reloader from "${ShortPaths.HMRSource}";
-Reloader("reload-complete", window.HMR.update);`,
+Reloader("reload-complete", window.HMR.update);
+import { setup } from "https://esm.sh/twind@0.16.17/shim";
+setup(${JSON.stringify(Loaded.Themed)});
+createRoot(dom).render(app);`,
+
 HMRSource: `
 let reloads = 0;
 const socket = new WebSocket("ws://"+document.location.host+"${ShortPaths.HMRListen}");
@@ -144,6 +143,7 @@ export default (path, handler)=>
     members.push(handler);
     listeners.set(path, members);
 };`,
+
 HMRModuleProxy:async(inModule:string):Promise<string>=>
 {
     const imp = await import("file://"+options.Active+inModule);
@@ -156,6 +156,7 @@ HMRModuleProxy:async(inModule:string):Promise<string>=>
     const reloadHandler = (updatedModule)=>{ ${ members.map(m=>`proxy_${m} = updatedModule.${m};`).join(" ") }};
     Reloader("${inModule}", reloadHandler);`;
 },
+
 HMRReactProxy:`
 import * as ReactParts from "react-alias";
 window.HMR = { registered:new Map() };
@@ -198,7 +199,7 @@ try
 
     /// Create Mode: 
     imports["react-alias"] = imports["react"];
-    imports["react"] = "/hmr-react-proxy";
+    imports["react"] = ShortPaths.HMRReactProxy;
 
     for( const key in imports)
     {
@@ -254,10 +255,9 @@ const SSR =async(inURL:URL):Promise<ReactDOMServer.ReactDOMServerReadableStream>
     <Loaded.Launch.Shell
         isoModel={isoModel}
         styles={""}
-        shimSetup={JSON.stringify(Loaded.Themed)}
         importMap={JSON.stringify(Loaded.Import)}
         bake={bake}
-        appPath={`./${options.Client}/${options.Launch}`}
+        init={LitCode.HMRInit(isoModel)}
     />);
 };
 
