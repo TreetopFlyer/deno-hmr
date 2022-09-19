@@ -95,19 +95,19 @@ import { IsoProvider } from "amber";
 
 const iso = ${JSON.stringify(isoModel)};      
 const dom = document.querySelector("#app");
-const app = h(IsoProvider, {seed:iso}, h(App));
 const url = new URL(location.href);
+const app =()=> h(IsoProvider, {seed:iso}, h(App));
 
 ${  options.Server ?
     /* /// Server Mode: hydrate server html */
-    `hydrateRoot(dom, app);`
+    `hydrateRoot(dom, h(app));`
     :
     /* /// Create Mode: client-side rendering and setup of twind */
     `import Reloader from "${RoutePaths.HMRSource}";
     Reloader("reload-complete", window.HMR.update);
     import { setup } from "https://esm.sh/twind@0.16.17/shim";
     setup(${JSON.stringify(Loaded.Themed)});
-    createRoot(dom).render(app);`
+    createRoot(dom).render(h(app));`
 }`,
 
 HMRSource: `
@@ -401,7 +401,7 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
             const code = await Deno.readTextFile(inFullProjectPath);
             if(isTranspiled)
             {
-                const parsed = await ESBuild.transform(code, {loader:"tsx", sourcemap:"inline", minify:true});
+                const parsed = await ESBuild.transform(code, {loader:"tsx", minify:true});
                 const proxy = await LitCode.HMRModuleProxy(webPath);
                 localStorage.setItem(webPath, parsed.code);
                 localStorage.setItem(webPath+".pxy", proxy);
