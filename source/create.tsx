@@ -8,7 +8,7 @@ import MIMELUT from "./mime.json" assert {type:"json"};
 import * as ESBuild from "https://deno.land/x/esbuild@v0.14.45/mod.js";
 import * as Twind from "https://esm.sh/twind";
 import * as TwindServer from "https://esm.sh/twind/shim/server";
-import { type State, PathParse, IsoProvider } from "./client.tsx";
+import { type State, type ShellComponent, type AppComponent, PathParse, IsoProvider } from "./client.tsx";
 
 export type MemoryFile = {
     xpiled?:string,
@@ -44,12 +44,67 @@ for(let i=0; i<Deno.args.length; i++)
     }
 }
 
+type LoadedResources =
+{
+    Import:{imports:{[key:string]:string}},
+    Themed:{theme:{[key:string]:unknown}, plugins:{[key:string]:unknown}},
+    Launch:{App:AppComponent, Shell:ShellComponent};
+};
+const Loaded:LoadedResources =
+{
+    Import:{imports:{}},
+    Launch:{
+        App:()=><></>,
+        Shell:({isoModel, styles, shimSetup, importMap, bake, appPath})=>
+        {
+            return <html>
+                <head>
+                    <title>{isoModel.Meta.Title??""}</title>
+                    <link rel="canonical" href={isoModel.Path.Parts.join("/")}></link>
+                    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                    <meta name="description" content={isoModel.Meta.Description??""}/>
+                    <style id="tw-main" dangerouslySetInnerHTML={{__html:styles}}/>
+                    <script type="importmap" dangerouslySetInnerHTML={{__html:importMap}} />
+                </head>
+                <body>
+                    <div id="app" dangerouslySetInnerHTML={{__html:bake}}></div>
+                    <script type="module" dangerouslySetInnerHTML={{__html:
+            `import React, {createElement as h} from "react";
+            import {hydrateRoot, createRoot} from "react-dom/client";
+            import App from "./${appPath}";
+            import { IsoProvider } from "amber";
+        
+            const iso = ${JSON.stringify(isoModel)};      
+            const dom = document.querySelector("#app");
+            const app = h(IsoProvider, {seed:iso}, h(App));
+            const url = new URL(location.href);
+        
+            /// Server Mode: hydrate server html
+            //hydrateRoot(dom, app);
+        
+            /// Create Mode: client-side rendering and setup of twind
+            Reloader("reload-complete", window.HMR.update);
+            import Reloader from "/hmr-source";
+            import { setup } from "https://esm.sh/twind@0.16.17/shim";
+            setup(${shimSetup});
+            createRoot(dom).render(app);
+            `}}/>
+                </body>
+            </html>;
+        }
+    },
+    Themed:{theme:{}, plugins:{}}
+};
+
 // tweak import map for browser
 try
 {
-    options.Import = await Deno.readTextFile(options.Import);
-    const parsed = JSON.parse(options.Import);
-    const imports = parsed["imports"];
+    const mapImport = await import(`file://${options.Active}/${options.Import}`, {assert:{type:"json"}});
+    Loaded.Import = mapImport.default;
+    const imports = Loaded.Import.imports;
+
+    if(!imports["react"]){ throw `import map does not alias "react"`; }
+    if(!imports["react-dom/"]){ throw `import map does not alias "react-dom/"`;}
 
     /// Create Mode: 
     imports["react-alias"] = imports["react"];
@@ -63,79 +118,38 @@ try
             imports[key] = "./source/client.tsx";
         }
     }
-
-    options.Import = JSON.stringify(parsed);
 }
-catch(e) { console.log(`Amber Start: (ERROR) Import map "${options.Import}" not found`); }
+catch(e) { console.log(`Amber Start: (ERROR) loading import map "${options.Import}" ${e}`); }
 
 /// Any Mode: load the tailwind config settings
-let TwindConfig = {theme:{}, plugins:{}};
 try
 {
     const twindImport = await import(`file://${options.Active}/${options.Themed}`);
     if(twindImport.default)
     {
-        TwindConfig = twindImport.default;
+        Loaded.Themed.plugins = twindImport.default.plugins??{};
+        Loaded.Themed.theme = twindImport.default.theme??{};
     }
 }
-catch { console.log(`error loading twind config "${options.Themed}" `) }
+catch(e) { console.log(`Amber Start: (ERROR) loading twind config "${options.Themed}" ${e}`) }
 
 /// Any Mode: load App and Shell
-let App = ()=>null;
-let Shell =({isoModel, styles, importMap, bake, appPath}:{isoModel:State, styles:string, importMap:string, bake:string, appPath:string})=>
-{
-    return <html>
-        <head>
-            <title>{isoModel.Meta.Title??""}</title>
-            <link rel="canonical" href={isoModel.Path.Parts.join("/")}></link>
-            <meta name="viewport" content="width=device-width, initial-scale=1"/>
-            <meta name="description" content={isoModel.Meta.Description??""}/>
-            <style id="tw-main" dangerouslySetInnerHTML={{__html:styles}}/>
-            <script type="importmap" dangerouslySetInnerHTML={{__html:importMap}} />
-        </head>
-        <body>
-            <div id="app" dangerouslySetInnerHTML={{__html:bake}}></div>
-            <script type="module" dangerouslySetInnerHTML={{__html:
-    `import React, {createElement as h} from "react";
-    import {hydrateRoot, createRoot} from "react-dom/client";
-    import App from "./${appPath}";
-    import { IsoProvider } from "amber";
-
-    const iso = ${JSON.stringify(isoModel)};      
-    const dom = document.querySelector("#app");
-    const app = h(IsoProvider, {seed:iso}, h(App));
-    const url = new URL(location.href);
-
-    /// Server Mode: hydrate server html
-    //hydrateRoot(dom, app);
-
-    /// Create Mode: client-side rendering and setup of twind
-    Reloader("reload-complete", window.HMR.update);
-    import Reloader from "/hmr-source";
-    import { setup } from "https://esm.sh/twind@0.16.17/shim";
-    setup(${JSON.stringify(TwindConfig)});
-    createRoot(dom).render(app);
-    `}}/>
-        </body>
-    </html>;
-}
-const appPath = `file://${options.Active}/${options.Client}/${options.Launch}`;
 try
 {
-    const appImport = await import(appPath);
-    App = appImport.default;
+    const appImport = await import(`file://${options.Active}/${options.Client}/${options.Launch}`);
+    Loaded.Launch.App = appImport.default;
     if(appImport.Shell)
     {
-        Shell = appImport.Shell;
+        Loaded.Launch.Shell = appImport.Shell;
     }
 }
-catch(e) { console.log(e); console.log(`Launch file "${options.Launch}" cound not be found in Client directory "${appPath}".`); }
+catch(e) { console.log(e); console.log(`Amber Start: (ERROR) Launch App "${options.Launch}" cound not be found in Client directory "${options.Active}/${options.Client}/"`, e); }
 
 /// Server Mode: Render react app
 const SSR =async(inURL:URL):Promise<ReactDOMServer.ReactDOMServerReadableStream>=>
 {
     const isoModel:State = { Meta:{}, Data:{}, Path:PathParse(inURL), Client:false, Queue:[] }
-    let bake = ReactDOMServer.renderToString(<IsoProvider seed={isoModel}><App/></IsoProvider>);
+    let bake = ReactDOMServer.renderToString(<IsoProvider seed={isoModel}><Loaded.Launch.App/></IsoProvider>);
     let count = 0;
     while(isoModel.Queue.length)
     {
@@ -143,10 +157,18 @@ const SSR =async(inURL:URL):Promise<ReactDOMServer.ReactDOMServerReadableStream>
         if(count > 5) { break; }
         await Promise.all(isoModel.Queue);
         isoModel.Queue = [];
-        bake = ReactDOMServer.renderToString(<IsoProvider seed={isoModel}><App/></IsoProvider>);
+        bake = ReactDOMServer.renderToString(<IsoProvider seed={isoModel}><Loaded.Launch.App/></IsoProvider>);
     }
     isoModel.Client = true;
-    return ReactDOMServer.renderToReadableStream(<Shell isoModel={isoModel} styles={""} importMap={options.Import} bake={bake} appPath={`./${options.Client}/${options.Launch}`} />);
+    return ReactDOMServer.renderToReadableStream(
+    <Loaded.Launch.Shell
+        isoModel={isoModel}
+        styles={""}
+        shimSetup={JSON.stringify(Loaded.Themed)}
+        importMap={JSON.stringify(Loaded.Import)}
+        bake={bake}
+        appPath={`./${options.Client}/${options.Launch}`}
+    />);
 };
 
 
