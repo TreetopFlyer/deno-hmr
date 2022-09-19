@@ -10,14 +10,7 @@ import * as Twind from "https://esm.sh/twind";
 import * as TwindServer from "https://esm.sh/twind/shim/server";
 import { type State, type ShellComponent, type AppComponent, PathParse, IsoProvider } from "./client.tsx";
 
-export type MemoryFile = {
-    xpiled?:string,
-    source?:string,
-    styles?:string,
-};
-
 /** Initialization/Setup ******************************************/
-
 const options = {
     Themed: "twind.tsx",
     Source: "source",
@@ -107,7 +100,7 @@ const url = new URL(location.href);
 
 ${  options.Server ?
     /* /// Server Mode: hydrate server html */
-    ` hydrateRoot(dom, app);`
+    `hydrateRoot(dom, app);`
     :
     /* /// Create Mode: client-side rendering and setup of twind */
     `import Reloader from "${RoutePaths.HMRSource}";
@@ -176,6 +169,7 @@ const ProxyElement =(props)=>
 {
     const [stateGet, stateSet] = ReactParts.useState(0);
     ReactParts.useEffect(()=>window.HMR.onChange( ()=>stateSet(stateGet+1), "yep" ));
+    console.log("proxy re-rendering");
     return ReactParts.createElement(props.children.type, {...props.children.props, _proxy:Math.random()})
 };
 const ProxyCreate =(...args)=>
@@ -275,7 +269,7 @@ const Sockets:Set<WebSocket> = new Set();
 const SocketsBroadcast =(inData:string)=>{ for (const socket of Sockets){ socket.send(inData); } }
 
 const FileRoutes = options.Server ?
-(url:URL)=>
+(url:URL, request:Request)=>
 {
     /// Server Mode: all /hmr-* routes are for hot module reloading
     if(url.pathname.startsWith("/"+options.Client) || url.pathname.startsWith("/"+options.Source) )
@@ -288,7 +282,7 @@ const FileRoutes = options.Server ?
     }
 }
 :
-(url:URL)=>
+(url:URL, request:Request)=>
 {
     /// Create Mode: all /hmr-* routes are for hot module reloading
     if(url.pathname == RoutePaths.HMRSource)
@@ -303,7 +297,7 @@ const FileRoutes = options.Server ?
     {
         try
         {
-          const { response, socket } = Deno.upgradeWebSocket(inRequest);
+          const { response, socket } = Deno.upgradeWebSocket(request);
           socket.onopen = () =>
           {
               Sockets.add(socket);
@@ -352,7 +346,7 @@ serve(async(inRequest)=>
 {
     const url = new URL(inRequest.url);
 
-    const file:Response|false = FileRoutes(url);
+    const file:Response|false = FileRoutes(url, inRequest);
     if(file)
     {
         return file;
@@ -382,108 +376,43 @@ localStorage.clear();
 const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):Promise<string>=>
 {
     const ext = inFullProjectPath.substring(inFullProjectPath.lastIndexOf("."));
-    const cachePathBase = options.Active + "\\.cached\\gen\\file\\" + inFullProjectPath.replace(":", "");
-    const cachePath = cachePathBase+".js";
-    
     const webPath = inFullProjectPath.substring(options.Active.length).replaceAll("\\", "/");
     const isTranspiled = (ext == ".ts" || ext == ".tsx" || ext == ".jsx");
 
-    console.log("xpile started.....", webPath);
-
     if(deletion)
     {
+        localStorage.removeItem(webPath);
         if(isTranspiled)
         {
-            const cachePathMeta = cachePathBase+".meta";
-            await Deno.remove(cachePath);
-            await Deno.remove(cachePathMeta);
-            localStorage.removeItem(webPath);
-            localStorage.removeItem(webPath+".map");
             localStorage.removeItem(webPath+".pxy");
-        }
-        else
-        {
-            localStorage.removeItem(webPath);
         }
         console.log(`Overwatch: removed (${webPath})`);
         return webPath;
     }
 
-    const ReadFile =async(cachePath:string):Promise<string|false>=>
+    try
     {
-        try
+        if(checkFirst && localStorage.getItem(webPath))
         {
-            const code = await Deno.readTextFile(cachePath);
-            return code;
-        }
-        catch{ return false; }
-    };
-    const WriteCache =async(inFullProjectPath:string):Promise<void>=>
-    {
-        const process = Deno.run({cmd:["deno", "cache", `${inFullProjectPath}`]});
-        await process.status();
-    };
-    const WriteMemory =async(code:string, isTranspiled:boolean):Promise<void>=>
-    {
-        if(isTranspiled)
-        {
-            const split = code.lastIndexOf("//# sourceMappingURL=");
-            const wentIn = code.substring(0, split);
-            const proxy = await LitCode.HMRModuleProxy(webPath);
-
-            localStorage.setItem(webPath, wentIn);
-            localStorage.setItem(webPath+".map", code.substring(split));
-            localStorage.setItem(webPath+".pxy", proxy);
+            console.log("file aready cached");
         }
         else
         {
-            localStorage.setItem(webPath, code);
-        }
-    };
-    const WriteCacheAndMemory =async(inFullProjectPath:string, cachePath:string, isTranspiled:boolean)=>
-    {
-        await WriteCache(inFullProjectPath);
-        const code:string|false = await ReadFile(cachePath);
-        if(code)
-        {
-            await WriteMemory(code, isTranspiled);
-        }
-    };
-
-
-    if(isTranspiled)
-    {
-        if(checkFirst)
-        {
-            const code:string|false = await ReadFile(cachePath);
-            if(code)
+            const code = await Deno.readTextFile(inFullProjectPath);
+            if(isTranspiled)
             {
-                await WriteMemory(code, isTranspiled);
-                console.log(`Overwatch: loaded from cache (${webPath})`);
+                const parsed = await ESBuild.transform(code, {loader:"tsx", sourcemap:"inline", minify:true});
+                const proxy = await LitCode.HMRModuleProxy(webPath);
+                localStorage.setItem(webPath, parsed.code);
+                localStorage.setItem(webPath+".pxy", proxy);
             }
             else
             {
-                await WriteCacheAndMemory(inFullProjectPath, cachePath, isTranspiled);
-                console.log(`Overwatch: added to cache (${webPath})`);
+                localStorage.setItem(webPath, code);
             }
         }
-        else
-        {
-            await WriteCacheAndMemory(inFullProjectPath, cachePath, isTranspiled);
-            console.log(`Overwatch: updated cache of (${webPath})`);
-        }
     }
-    else
-    {
-        const code:string|false = await ReadFile(inFullProjectPath);
-        if(code)
-        {
-            await WriteMemory(code, isTranspiled);
-            console.log(`Overwatch: basic file added (${webPath})`);
-        }
-    }
-    
-    console.log("xpile done!", webPath);
+    catch(e){ console.log(`error caching "${inFullProjectPath}"`, e); }
     return webPath;
 };
 const filesChanged:Map<string, string> = new Map();
