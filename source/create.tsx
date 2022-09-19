@@ -4,14 +4,13 @@ import { debounce } from "https://deno.land/std@0.151.0/async/debounce.ts";
 import { walk } from "https://deno.land/std@0.155.0/fs/mod.ts";
 import { serve } from "https://deno.land/std@0.155.0/http/server.ts";
 import MIMELUT from "./mime.json" assert {type:"json"};
-
 import * as ESBuild from "https://deno.land/x/esbuild@v0.14.45/mod.js";
 import * as Twind from "https://esm.sh/twind";
 import * as TwindServer from "https://esm.sh/twind/shim/server";
 import { type State, type ShellComponent, type AppComponent, PathParse, IsoProvider } from "./client.tsx";
 
 /** Initialization/Setup ******************************************/
-const options = {
+export const options = {
     Themed: "twind.tsx",
     Source: "source",
     Static: "static",
@@ -38,14 +37,12 @@ for(let i=0; i<Deno.args.length; i++)
         else if(key == "--server"){ options.Server = true; }
     }
 }
-
-type LoadedResources =
-{
+export type LoadedResources = {
     Import:{imports:{[key:string]:string}},
-    Themed:{theme:{[key:string]:unknown}, plugins:{[key:string]:unknown}},
+    Themed:{theme:Twind.ThemeConfiguration, plugins:Record<string, Twind.Plugin | undefined>},
     Launch:{App:AppComponent, Shell:ShellComponent};
 };
-const Loaded:LoadedResources =
+export const Loaded:LoadedResources =
 {
     Import:{imports:{}},
     Launch:{
@@ -70,13 +67,11 @@ const Loaded:LoadedResources =
     },
     Themed:{theme:{}, plugins:{}}
 };
-
 export const FullPaths = {
     Import:`file://${options.Active}/${options.Import}`,
     Themed:`file://${options.Active}/${options.Themed}`,
     Launch:`file://${options.Active}/${options.Client}/${options.Launch}`
 };
-
 export const RoutePaths = {
     Amber: `/${options.Source}/client.tsx`,
     Entry: `/${options.Client}/${options.Launch}`,
@@ -84,9 +79,7 @@ export const RoutePaths = {
     HMRListen:`/hmr-listen`,
     HMRReactProxy:`/hmr-react-proxy`
 };
-
 export const LitCode = {
-
 HMRInit:(isoModel:State)=>`
 import React, {createElement as h} from "react";
 import {hydrateRoot, createRoot} from "react-dom/client";
@@ -181,16 +174,16 @@ export * from "react-alias";
 export default ReactParts.default;
 export { ProxyCreate as createElement };`
 };
-
+export const Util ={
+    Extension: (inPath:string):string => inPath.substring(inPath.lastIndexOf(".")),
+    JavaScript: (inExtension:string):boolean => inExtension == ".tsx" || inExtension == ".ts" || inExtension == ".jsx" || inExtension == ".js"
+};
 // tweak import map for browser
 try
 {
     const mapImport = await import(FullPaths.Import, {assert:{type:"json"}});
     Loaded.Import = mapImport.default;
     const imports = Loaded.Import.imports;
-
-    if(!imports["react"]){ throw `import map does not alias "react"`; }
-    if(!imports["react-dom/"]){ throw `import map does not alias "react-dom/"`;}
 
     /// Create Mode: 
     if(!options.Server)
@@ -209,7 +202,6 @@ try
     }
 }
 catch(e) { console.log(`Amber Start: (ERROR) loading import map "${FullPaths.Import}" ${e}`); }
-
 /// Any Mode: load the tailwind config settings
 try
 {
@@ -221,7 +213,6 @@ try
     }
 }
 catch(e) { console.log(`Amber Start: (ERROR) loading twind config "${FullPaths.Themed}" ${e}`) }
-
 /// Any Mode: load App and Shell
 try
 {
@@ -234,40 +225,12 @@ try
 }
 catch(e) { console.log(e); console.log(`Amber Start: (ERROR) loading launch app "${FullPaths.Launch}"`, e); }
 
-const SSR =async(inURL:URL):Promise<ReactDOMServer.ReactDOMServerReadableStream>=>
-{
-    const isoModel:State = { Meta:{}, Data:{}, Path:PathParse(inURL), Client:false, Queue:[] }
-    /// Server Mode: Render react app
-    let bake = options.Server ? ReactDOMServer.renderToString(<IsoProvider seed={isoModel}><Loaded.Launch.App/></IsoProvider>) : "dev mode loading";
-    let count = 0;
-    while(isoModel.Queue.length)
-    {
-        count ++;
-        if(count > 5) { break; }
-        await Promise.all(isoModel.Queue);
-        isoModel.Queue = [];
-        bake = ReactDOMServer.renderToString(<IsoProvider seed={isoModel}><Loaded.Launch.App/></IsoProvider>);
-    }
-    isoModel.Client = true;
-    return ReactDOMServer.renderToReadableStream(
-    <Loaded.Launch.Shell
-        isoModel={isoModel}
-        styles={""}
-        importMap={JSON.stringify(Loaded.Import)}
-        bake={bake}
-        init={LitCode.HMRInit(isoModel)}
-    />);
-};
-
-
 /** WebSocket and HTTP Server ******************************************/
 // some of this is create mode some is server mode depending on the route.
 // assume each route is both modes unless otherwise stated.
-
 /// Create Mode: misc items for websocket hmr updates
 const Sockets:Set<WebSocket> = new Set();
 const SocketsBroadcast =(inData:string)=>{ for (const socket of Sockets){ socket.send(inData); } }
-
 const FileRoutes = options.Server ?
 (url:URL, request:Request)=>
 {
@@ -319,8 +282,8 @@ const FileRoutes = options.Server ?
     }
     if(url.pathname.startsWith("/"+options.Client) || url.pathname.startsWith("/"+options.Source) )
     {
-        const endsWith = url.pathname.substring(url.pathname.lastIndexOf("."));
-        if(endsWith == ".tsx" || endsWith == ".ts" || endsWith == ".jsx")
+        const ext = Util.Extension(url.pathname);
+        if(Util.JavaScript(ext))
         {
             /// Create Mode: this logic is for providing "proxied" modules
             if(url.searchParams.get("reload"))
@@ -341,11 +304,9 @@ const FileRoutes = options.Server ?
     }
     return false;
 }
-
 serve(async(inRequest)=>
 {
     const url = new URL(inRequest.url);
-
     const file:Response|false = FileRoutes(url, inRequest);
     if(file)
     {
@@ -356,45 +317,56 @@ serve(async(inRequest)=>
         try
         {
             const text = await Deno.open("./"+url.pathname);
-            const ext:string = url.pathname.substring(url.pathname.lastIndexOf(".")) ?? "";
-            const type = (MIMELUT as {[key:string]:string})[ext] ?? "application/javascript";
+            const type = (MIMELUT as {[key:string]:string})[Util.Extension(url.pathname)] ?? "application/javascript";
             return new Response(text.readable, {status:200, headers:{"content-type": `${type}; charset=utf-8`}});
         }
         catch { return new Response("404", {status:404}); }
     }
     else
     {
-        const rendered = await SSR(url);
-        return new Response(rendered, {status:200, headers:{"content-type":"text/html"}});
+        const isoModel:State = { Meta:{}, Data:{}, Path:PathParse(url), Client:false, Queue:[] }
+        /// Server Mode: Render react app
+        let bake = options.Server ? ReactDOMServer.renderToString(<IsoProvider seed={isoModel}><Loaded.Launch.App/></IsoProvider>) : "dev mode loading";
+        let count = 0;
+        while(isoModel.Queue.length)
+        {
+            count ++;
+            if(count > 5) { break; }
+            await Promise.all(isoModel.Queue);
+            isoModel.Queue = [];
+            bake = ReactDOMServer.renderToString(<IsoProvider seed={isoModel}><Loaded.Launch.App/></IsoProvider>);
+        }
+        isoModel.Client = true;
+        const stream = await ReactDOMServer.renderToReadableStream(
+        <Loaded.Launch.Shell isoModel={isoModel} styles={localStorage.getItem("stylesheet")??""} importMap={JSON.stringify(Loaded.Import)} bake={bake} init={LitCode.HMRInit(isoModel)}/>);
+        return new Response(stream, {status:200, headers:{"content-type":"text/html"}});
     }
 
 }, {port:8000});
 
-
 /** File System Launcher/Watcher ******************************************/
+const sheet = TwindServer.virtualSheet();
+const parse = Twind.create({ sheet: sheet, preflight: true, theme:Loaded.Themed.plugins, plugins:Loaded.Themed.plugins, mode: "silent" }).tw;
+const leave = [ "__defineGetter__", "__defineSetter__", "__lookupGetter__", "__lookupSetter__", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable", "valueOf", "toLocaleString" ];
+
 localStorage.clear();
 const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):Promise<string>=>
 {
-    const ext = inFullProjectPath.substring(inFullProjectPath.lastIndexOf("."));
+    const ext = Util.Extension(inFullProjectPath);
+    const isTranspiled = Util.JavaScript(ext);
     const webPath = inFullProjectPath.substring(options.Active.length).replaceAll("\\", "/");
-    const isTranspiled = (ext == ".ts" || ext == ".tsx" || ext == ".jsx");
 
     if(deletion)
     {
         localStorage.removeItem(webPath);
-        if(isTranspiled)
-        {
-            localStorage.removeItem(webPath+".pxy");
-        }
-        console.log(`Overwatch: removed (${webPath})`);
+        if(isTranspiled){ localStorage.removeItem(webPath+".pxy"); }
         return webPath;
     }
-
     try
     {
         if(checkFirst && localStorage.getItem(webPath))
         {
-            console.log("file aready cached");
+            //console.log("file aready cached");
         }
         else
         {
@@ -405,6 +377,21 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
                 const proxy = await LitCode.HMRModuleProxy(webPath);
                 localStorage.setItem(webPath, parsed.code);
                 localStorage.setItem(webPath+".pxy", proxy);
+                if(options.Server)
+                {
+                    const m = parsed.code.match(/[^<>\[\]\(\)|&"'`\.\s]*[^<>\[\]\(\)|&"'`\.\s:]/g);
+                    if (m)
+                    {
+                        for (const c of m)
+                        {
+                            if (leave.indexOf(c) === -1)
+                            {
+                                try { parse(c); }
+                                catch (e) { console.log(`Error: Failed to handle the pattern '${c}'`); }
+                            }
+                        }
+                    }
+                }
             }
             else
             {
@@ -432,8 +419,6 @@ const ProcessFiles =debounce(async()=>
     }
     filesChanged.clear();
 }, 500);
-
-
 for await (const entry of walk(options.Active+"\\"+options.Client, {includeDirs:false}))
 {
     await XPile(entry.path, true);
@@ -445,8 +430,11 @@ if(!options.Server)
     const watcher = Deno.watchFs(options.Client);
     for await (const event of watcher)
     {
-        console.log("watch event", event);
         event.paths.forEach( path => filesChanged.set(path, event.kind) );
         ProcessFiles();
     }
+}
+else
+{
+    localStorage.setItem("stylesheet", TwindServer.getStyleTagProperties(sheet).textContent);
 }

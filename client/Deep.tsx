@@ -34,7 +34,7 @@ export default ()=>
 
     return <div className="p-2 border">
     <h1 className="p-4 border">current route: {folder}</h1>
-    <p className="p-4 border text-xl" onClick={e=>stateSet(stateGet+1)}>current?: {JSON.stringify(routeGet.Query)}</p>
+    <p className="p-4 border text-xl" onClick={e=>stateSet(stateGet+1)}>current!: {JSON.stringify(routeGet.Query)}</p>
     <nav>
         <a className={`text-white p-2 ${highlight("")}`} href="/">Home</a>
         <a className={`text-white p-2 ${highlight("about")}`} href="/about">About</a>
