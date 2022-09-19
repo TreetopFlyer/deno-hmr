@@ -16,6 +16,8 @@ export type MemoryFile = {
     styles?:string,
 };
 
+/** Initialization/Setup ******************************************/
+
 const options = {
     Themed: "twind.tsx",
     Source: "source",
@@ -42,18 +44,31 @@ for(let i=0; i<Deno.args.length; i++)
     }
 }
 
+// tweak import map for browser
 try
 {
     options.Import = await Deno.readTextFile(options.Import);
     const parsed = JSON.parse(options.Import);
-    parsed["imports"]["react-alias"] = parsed["imports"]["react"];
-    parsed["imports"]["react"] = "/hmr-react-proxy";
+    const imports = parsed["imports"];
+
+    /// Create Mode: 
+    imports["react-alias"] = imports["react"];
+    imports["react"] = "/hmr-react-proxy";
+
+    for( const key in imports)
+    {
+        const value = imports[key];
+        if(value.indexOf("source/client.tsx") != -1)
+        {
+            imports[key] = "./source/client.tsx";
+        }
+    }
+
     options.Import = JSON.stringify(parsed);
 }
 catch(e) { console.log(`Amber Start: (ERROR) Import map "${options.Import}" not found`); }
 
-console.log("Overwatch running at", options.Active);
-
+/// Any Mode: load the tailwind config settings
 let TwindConfig = {theme:{}, plugins:{}};
 try
 {
@@ -62,15 +77,10 @@ try
     {
         TwindConfig = twindImport.default;
     }
-    else
-    {
-        console.log("no twind theme provided");
-    }
 }
 catch { console.log(`error loading twind config "${options.Themed}" `) }
 
-/** React Components ******************************************/
-// load App and Shell
+/// Any Mode: load App and Shell
 let App = ()=>null;
 let Shell =({isoModel, styles, importMap, bake, appPath}:{isoModel:State, styles:string, importMap:string, bake:string, appPath:string})=>
 {
@@ -90,23 +100,25 @@ let Shell =({isoModel, styles, importMap, bake, appPath}:{isoModel:State, styles
     import {hydrateRoot, createRoot} from "react-dom/client";
     import App from "./${appPath}";
     import { IsoProvider } from "amber";
-    import Reloader from "/hmr-source";
-    import { setup } from "https://esm.sh/twind@0.16.17/shim";
-    setup(${JSON.stringify(TwindConfig)})
 
     const iso = ${JSON.stringify(isoModel)};      
     const dom = document.querySelector("#app");
     const app = h(IsoProvider, {seed:iso}, h(App));
     const url = new URL(location.href);
 
-    hydrateRoot(dom, app);
+    /// Server Mode: hydrate server html
+    //hydrateRoot(dom, app);
 
+    /// Create Mode: client-side rendering and setup of twind
     Reloader("reload-complete", window.HMR.update);
+    import Reloader from "/hmr-source";
+    import { setup } from "https://esm.sh/twind@0.16.17/shim";
+    setup(${JSON.stringify(TwindConfig)});
+    createRoot(dom).render(app);
     `}}/>
         </body>
     </html>;
 }
-
 const appPath = `file://${options.Active}/${options.Client}/${options.Launch}`;
 try
 {
@@ -119,6 +131,7 @@ try
 }
 catch(e) { console.log(e); console.log(`Launch file "${options.Launch}" cound not be found in Client directory "${appPath}".`); }
 
+/// Server Mode: Render react app
 const SSR =async(inURL:URL):Promise<ReactDOMServer.ReactDOMServerReadableStream>=>
 {
     const isoModel:State = { Meta:{}, Data:{}, Path:PathParse(inURL), Client:false, Queue:[] }
@@ -138,21 +151,18 @@ const SSR =async(inURL:URL):Promise<ReactDOMServer.ReactDOMServerReadableStream>
 
 
 /** WebSocket and HTTP Server ******************************************/
+// some of this is create mode some is server mode depending on the route.
+// assume each route is both modes unless otherwise stated.
+
+/// Create Mode: misc items for websocket hmr updates
 const Sockets:Set<WebSocket> = new Set();
-const SocketsBroadcast =(inData:string)=>
-{
-    console.log("Broadcasting", inData);
-    for (const socket of Sockets){ socket.send(inData); }
-}
+const SocketsBroadcast =(inData:string)=>{ for (const socket of Sockets){ socket.send(inData); } }
+
 serve(async(inRequest)=>
 {
     const url = new URL(inRequest.url);
-        
-    if(url.pathname == "/favicon.ico")
-    {
-        return new Response("", {status:404});
-    }
 
+    /// Create Mode: all /hmr-* routes are for hot module reloading
     if(url.pathname == "/hmr-source")
     {
         return new Response(`
@@ -183,7 +193,6 @@ serve(async(inRequest)=>
             listeners.set(path, members);
         };`, {status:200, headers:{"content-type":"application/javascript"}});
     }
-
     if(url.pathname == "/hmr-react-proxy")
     {
         return new Response(`
@@ -220,7 +229,6 @@ serve(async(inRequest)=>
         export default ReactParts.default;
         export { ProxyCreate as createElement };`, {status:200, headers:{"content-type":"application/javascript"}});
     }
-
     if(url.pathname == "/hmr-listen")
     {
         try
@@ -251,6 +259,7 @@ serve(async(inRequest)=>
         const endsWith = url.pathname.substring(url.pathname.lastIndexOf("."));
         if(endsWith == ".tsx" || endsWith == ".ts" || endsWith == ".jsx")
         {
+            /// Create Mode: this logic is for providing "proxied" modules
             if(url.searchParams.get("reload"))
             {
                 console.log("serving updated module", url.pathname);
@@ -264,6 +273,7 @@ serve(async(inRequest)=>
         }
         else
         {
+            /// Server mode: serve transpiled modules
             return new Response(localStorage.getItem(url.pathname), {status:200, headers:{"content-type":"application/javascript", "cache-control":"no-cache,no-save"}});
         }
     }
@@ -283,7 +293,6 @@ serve(async(inRequest)=>
 
 
 /** File System Launcher/Watcher ******************************************/
-
 localStorage.clear();
 const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):Promise<string>=>
 {

@@ -47,7 +47,6 @@ const Reducer =(inState:State, inAction:Actions)=>
                     }
                 }
             };
-            console.log("Path update", output);
             break;
         case "MetaReplace" :
             output = {...inState, Meta:inAction.payload};
@@ -149,12 +148,10 @@ const Effects =()=>
         {
             const NavigationHandler = (e:NavigationEvent) =>
             {
-                
                 if(e.navigationType !== "reload")
                 {
                     const u = new URL(e.destination.url);
                     const p = PathParse(u);
-                    console.log("NAV EVENT", p);
                     e.transitionWhile( routeSet(p) );
                 }
             };
