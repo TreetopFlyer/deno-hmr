@@ -26,6 +26,7 @@ const options = {
     Launch: "App.tsx",
     Import: "imports.json",
     Deploy: 3333,
+    Server: false,
     Active: Deno.cwd(),
 };
 for(let i=0; i<Deno.args.length; i++)
@@ -41,6 +42,7 @@ for(let i=0; i<Deno.args.length; i++)
         else if(key == "--import"){ options.Import = value; }
         else if(key == "--themed"){ options.Themed = value; }
         else if(key == "--deploy"){ options.Deploy = parseInt(value); }
+        else if(key == "--server"){ options.Server = true; }
     }
 }
 
@@ -79,15 +81,12 @@ const Loaded:LoadedResources =
 export const FullPaths = {
     Import:`file://${options.Active}/${options.Import}`,
     Themed:`file://${options.Active}/${options.Themed}`,
-    Launch:`file://${options.Active}/${options.Client}/${options.Launch}`,
-    Cached:`file://${options.Active}/${Deno.env.get("DENO_DIR")}/gen/file/${options.Active.replace(":", "")}/`
+    Launch:`file://${options.Active}/${options.Client}/${options.Launch}`
 };
 
-
-
-export const ShortPaths = {
-    Client: `/${options.Source}/client.tsx`,
-    Launch: `/${options.Client}/${options.Launch}`,
+export const RoutePaths = {
+    Amber: `/${options.Source}/client.tsx`,
+    Entry: `/${options.Client}/${options.Launch}`,
     HMRSource:`/hmr-source`,
     HMRListen:`/hmr-listen`,
     HMRReactProxy:`/hmr-react-proxy`
@@ -98,7 +97,7 @@ export const LitCode = {
 HMRInit:(isoModel:State)=>`
 import React, {createElement as h} from "react";
 import {hydrateRoot, createRoot} from "react-dom/client";
-import App from "${ShortPaths.Launch}";
+import App from "${RoutePaths.Entry}";
 import { IsoProvider } from "amber";
 
 const iso = ${JSON.stringify(isoModel)};      
@@ -106,19 +105,21 @@ const dom = document.querySelector("#app");
 const app = h(IsoProvider, {seed:iso}, h(App));
 const url = new URL(location.href);
 
-/// Server Mode: hydrate server html
-//hydrateRoot(dom, app);
-
-/// Create Mode: client-side rendering and setup of twind
-import Reloader from "${ShortPaths.HMRSource}";
-Reloader("reload-complete", window.HMR.update);
-import { setup } from "https://esm.sh/twind@0.16.17/shim";
-setup(${JSON.stringify(Loaded.Themed)});
-createRoot(dom).render(app);`,
+${  options.Server ?
+    /* /// Server Mode: hydrate server html */
+    ` hydrateRoot(dom, app);`
+    :
+    /* /// Create Mode: client-side rendering and setup of twind */
+    `import Reloader from "${RoutePaths.HMRSource}";
+    Reloader("reload-complete", window.HMR.update);
+    import { setup } from "https://esm.sh/twind@0.16.17/shim";
+    setup(${JSON.stringify(Loaded.Themed)});
+    createRoot(dom).render(app);`
+}`,
 
 HMRSource: `
 let reloads = 0;
-const socket = new WebSocket("ws://"+document.location.host+"${ShortPaths.HMRListen}");
+const socket = new WebSocket("ws://"+document.location.host+"${RoutePaths.HMRListen}");
 socket.addEventListener('message', (event) =>
 {
     const members = listeners.get(event.data)??[];
@@ -151,7 +152,7 @@ HMRModuleProxy:async(inModule:string):Promise<string>=>
     for( const key in imp ) { members.push(key); }
     return `
     import * as Import from "${inModule}?reload=0";
-    import Reloader from "${ShortPaths.HMRSource}";
+    import Reloader from "${RoutePaths.HMRSource}";
     ${ members.map(m=>`let proxy_${m} = Import.${m}; export { proxy_${m} as ${m} };`).join(" ") }
     const reloadHandler = (updatedModule)=>{ ${ members.map(m=>`proxy_${m} = updatedModule.${m};`).join(" ") }};
     Reloader("${inModule}", reloadHandler);`;
@@ -198,15 +199,18 @@ try
     if(!imports["react-dom/"]){ throw `import map does not alias "react-dom/"`;}
 
     /// Create Mode: 
-    imports["react-alias"] = imports["react"];
-    imports["react"] = ShortPaths.HMRReactProxy;
+    if(!options.Server)
+    {
+        imports["react-alias"] = imports["react"];
+        imports["react"] = RoutePaths.HMRReactProxy;
+    }
 
     for( const key in imports)
     {
         const value = imports[key];
-        if(value.indexOf(ShortPaths.Client) != -1)
+        if(value.indexOf(RoutePaths.Amber) != -1)
         {
-            imports[key] = ShortPaths.Client;
+            imports[key] = RoutePaths.Amber;
         }
     }
 }
@@ -236,11 +240,11 @@ try
 }
 catch(e) { console.log(e); console.log(`Amber Start: (ERROR) loading launch app "${FullPaths.Launch}"`, e); }
 
-/// Server Mode: Render react app
 const SSR =async(inURL:URL):Promise<ReactDOMServer.ReactDOMServerReadableStream>=>
 {
     const isoModel:State = { Meta:{}, Data:{}, Path:PathParse(inURL), Client:false, Queue:[] }
-    let bake = ReactDOMServer.renderToString(<IsoProvider seed={isoModel}><Loaded.Launch.App/></IsoProvider>);
+    /// Server Mode: Render react app
+    let bake = options.Server ? ReactDOMServer.renderToString(<IsoProvider seed={isoModel}><Loaded.Launch.App/></IsoProvider>) : "dev mode loading";
     let count = 0;
     while(isoModel.Queue.length)
     {
@@ -270,20 +274,32 @@ const SSR =async(inURL:URL):Promise<ReactDOMServer.ReactDOMServerReadableStream>
 const Sockets:Set<WebSocket> = new Set();
 const SocketsBroadcast =(inData:string)=>{ for (const socket of Sockets){ socket.send(inData); } }
 
-serve(async(inRequest)=>
+const FileRoutes = options.Server ?
+(url:URL)=>
 {
-    const url = new URL(inRequest.url);
-
+    /// Server Mode: all /hmr-* routes are for hot module reloading
+    if(url.pathname.startsWith("/"+options.Client) || url.pathname.startsWith("/"+options.Source) )
+    {
+        return new Response(localStorage.getItem(url.pathname), {status:200, headers:{"content-type":"application/javascript"}});
+    }
+    else
+    {
+        return false;
+    }
+}
+:
+(url:URL)=>
+{
     /// Create Mode: all /hmr-* routes are for hot module reloading
-    if(url.pathname == ShortPaths.HMRSource)
+    if(url.pathname == RoutePaths.HMRSource)
     {
         return new Response(LitCode.HMRSource, {status:200, headers:{"content-type":"application/javascript"}});
     }
-    if(url.pathname == ShortPaths.HMRReactProxy)
+    if(url.pathname == RoutePaths.HMRReactProxy)
     {
         return new Response(LitCode.HMRReactProxy, {status:200, headers:{"content-type":"application/javascript"}});
     }
-    if(url.pathname == ShortPaths.HMRListen)
+    if(url.pathname == RoutePaths.HMRListen)
     {
         try
         {
@@ -307,7 +323,6 @@ serve(async(inRequest)=>
           return new Response("Overwatch: Not a websocket request.");
         }
     }
-
     if(url.pathname.startsWith("/"+options.Client) || url.pathname.startsWith("/"+options.Source) )
     {
         const endsWith = url.pathname.substring(url.pathname.lastIndexOf("."));
@@ -327,21 +342,37 @@ serve(async(inRequest)=>
         }
         else
         {
-            /// Server mode: serve transpiled modules
             return new Response(localStorage.getItem(url.pathname), {status:200, headers:{"content-type":"application/javascript", "cache-control":"no-cache,no-save"}});
         }
     }
+    return false;
+}
 
-    if(url.pathname.startsWith("/"+options.Static))
+serve(async(inRequest)=>
+{
+    const url = new URL(inRequest.url);
+
+    const file:Response|false = FileRoutes(url);
+    if(file)
     {
-        const text = await Deno.open("./"+url.pathname);
-        const ext:string = url.pathname.substring(url.pathname.lastIndexOf(".")) ?? "";
-        const type = (MIMELUT as {[key:string]:string})[ext] ?? "application/javascript";
-        return new Response(text.readable, {status:200, headers:{"content-type": `${type}; charset=utf-8`}});
+        return file;
     }
-
-    const rendered = await SSR(url);
-    return new Response(rendered, {status:200, headers:{"content-type":"text/html"}});
+    else if(url.pathname.startsWith("/"+options.Static))
+    {
+        try
+        {
+            const text = await Deno.open("./"+url.pathname);
+            const ext:string = url.pathname.substring(url.pathname.lastIndexOf(".")) ?? "";
+            const type = (MIMELUT as {[key:string]:string})[ext] ?? "application/javascript";
+            return new Response(text.readable, {status:200, headers:{"content-type": `${type}; charset=utf-8`}});
+        }
+        catch { return new Response("404", {status:404}); }
+    }
+    else
+    {
+        const rendered = await SSR(url);
+        return new Response(rendered, {status:200, headers:{"content-type":"text/html"}});
+    }
 
 }, {port:8000});
 
@@ -455,13 +486,6 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
     console.log("xpile done!", webPath);
     return webPath;
 };
-
-for await (const entry of walk(options.Active+"\\"+options.Client, {includeDirs:false}))
-{
-    await XPile(entry.path, true);
-}
-await XPile(options.Active+"\\"+options.Source+"\\client.tsx", true);
-
 const filesChanged:Map<string, string> = new Map();
 const ProcessFiles =debounce(async()=>
 {
@@ -480,10 +504,20 @@ const ProcessFiles =debounce(async()=>
     filesChanged.clear();
 }, 500);
 
-const watcher = Deno.watchFs(options.Client);
-for await (const event of watcher)
+
+for await (const entry of walk(options.Active+"\\"+options.Client, {includeDirs:false}))
 {
-    console.log("watch event", event);
-    event.paths.forEach( path => filesChanged.set(path, event.kind) );
-    ProcessFiles();
+    await XPile(entry.path, true);
+}
+await XPile(options.Active+RoutePaths.Amber, true);
+
+if(!options.Server)
+{
+    const watcher = Deno.watchFs(options.Client);
+    for await (const event of watcher)
+    {
+        console.log("watch event", event);
+        event.paths.forEach( path => filesChanged.set(path, event.kind) );
+        ProcessFiles();
+    }
 }
