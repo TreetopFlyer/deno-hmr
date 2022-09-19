@@ -69,26 +69,26 @@ const Loaded:LoadedResources =
                 <body>
                     <div id="app" dangerouslySetInnerHTML={{__html:bake}}></div>
                     <script type="module" dangerouslySetInnerHTML={{__html:
-            `import React, {createElement as h} from "react";
-            import {hydrateRoot, createRoot} from "react-dom/client";
-            import App from "./${appPath}";
-            import { IsoProvider } from "amber";
-        
-            const iso = ${JSON.stringify(isoModel)};      
-            const dom = document.querySelector("#app");
-            const app = h(IsoProvider, {seed:iso}, h(App));
-            const url = new URL(location.href);
-        
-            /// Server Mode: hydrate server html
-            //hydrateRoot(dom, app);
-        
-            /// Create Mode: client-side rendering and setup of twind
-            Reloader("reload-complete", window.HMR.update);
-            import Reloader from "/hmr-source";
-            import { setup } from "https://esm.sh/twind@0.16.17/shim";
-            setup(${shimSetup});
-            createRoot(dom).render(app);
-            `}}/>
+`import React, {createElement as h} from "react";
+import {hydrateRoot, createRoot} from "react-dom/client";
+import App from "${appPath}";
+import { IsoProvider } from "amber";
+
+const iso = ${JSON.stringify(isoModel)};      
+const dom = document.querySelector("#app");
+const app = h(IsoProvider, {seed:iso}, h(App));
+const url = new URL(location.href);
+
+/// Server Mode: hydrate server html
+//hydrateRoot(dom, app);
+
+/// Create Mode: client-side rendering and setup of twind
+import Reloader from "/hmr-source";
+Reloader("reload-complete", window.HMR.update);
+import { setup } from "https://esm.sh/twind@0.16.17/shim";
+setup(${shimSetup});
+createRoot(dom).render(app);
+`}}/>
                 </body>
             </html>;
         }
@@ -96,10 +96,100 @@ const Loaded:LoadedResources =
     Themed:{theme:{}, plugins:{}}
 };
 
+export const FullPaths = {
+    Import:`file://${options.Active}/${options.Import}`,
+    Themed:`file://${options.Active}/${options.Themed}`,
+    Launch:`file://${options.Active}/${options.Client}/${options.Launch}`,
+    Cached:`file://${options.Active}/${Deno.env.get("DENO_DIR")}/gen/file/${options.Active.replace(":", "")}/`
+};
+
+
+
+export const ShortPaths = {
+    Client: `/${options.Source}/client.tsx`,
+    Launch: `/${options.Client}/${options.Launch}`,
+    HMRSource:`/hmr-source`,
+    HMRListen:`/hmr-listen`,
+    HMRReactProxy:`/hmr-react-proxy`
+};
+
+export const LitCode = {
+HMRInit:`
+import Reloader from "${ShortPaths.HMRSource}";
+Reloader("reload-complete", window.HMR.update);`,
+HMRSource: `
+let reloads = 0;
+const socket = new WebSocket("ws://"+document.location.host+"${ShortPaths.HMRListen}");
+socket.addEventListener('message', (event) =>
+{
+    const members = listeners.get(event.data)??[];
+    reloads++;
+    Promise.all(
+        members.map(m=>
+        {
+            return import(event.data+"?reload="+reloads)
+            .then(updatedModule=>m(updatedModule));
+        })
+    ).then(()=>
+    {
+        const members = listeners.get("reload-complete")??[];
+        members.forEach(m=>m());
+    });
+});
+
+const listeners = new Map();
+export default (path, handler)=>
+{
+    const members = listeners.get(path)??[];
+    members.push(handler);
+    listeners.set(path, members);
+};`,
+HMRModuleProxy:async(inModule:string):Promise<string>=>
+{
+    const imp = await import("file://"+options.Active+inModule);
+    const members = [];
+    for( const key in imp ) { members.push(key); }
+    return `
+    import * as Import from "${inModule}?reload=0";
+    import Reloader from "${ShortPaths.HMRSource}";
+    ${ members.map(m=>`let proxy_${m} = Import.${m}; export { proxy_${m} as ${m} };`).join(" ") }
+    const reloadHandler = (updatedModule)=>{ ${ members.map(m=>`proxy_${m} = updatedModule.${m};`).join(" ") }};
+    Reloader("${inModule}", reloadHandler);`;
+},
+HMRReactProxy:`
+import * as ReactParts from "react-alias";
+window.HMR = { registered:new Map() };
+window.HMR.onChange =(key, value)=>
+{
+    window.HMR.registered.set(key, value);
+};
+window.HMR.update =()=>
+{
+    const keys = [];
+    for(const [key, value] of window.HMR.registered){ keys.push(key); }
+    window.HMR.registered.clear();
+    keys.forEach(k=>k());
+};
+const ProxyElement =(props)=>
+{
+    const [stateGet, stateSet] = ReactParts.useState(0);
+    ReactParts.useEffect(()=>window.HMR.onChange( ()=>stateSet(stateGet+1), "yep" ));
+    return ReactParts.createElement(props.children.type, {...props.children.props, _proxy:Math.random()})
+};
+const ProxyCreate =(...args)=>
+{
+    const el = ReactParts.createElement(...args)
+    return typeof args[0] != "string" ? ReactParts.createElement(ProxyElement, null, el) : el;
+};
+export * from "react-alias";
+export default ReactParts.default;
+export { ProxyCreate as createElement };`
+};
+
 // tweak import map for browser
 try
 {
-    const mapImport = await import(`file://${options.Active}/${options.Import}`, {assert:{type:"json"}});
+    const mapImport = await import(FullPaths.Import, {assert:{type:"json"}});
     Loaded.Import = mapImport.default;
     const imports = Loaded.Import.imports;
 
@@ -113,37 +203,37 @@ try
     for( const key in imports)
     {
         const value = imports[key];
-        if(value.indexOf("source/client.tsx") != -1)
+        if(value.indexOf(ShortPaths.Client) != -1)
         {
-            imports[key] = "./source/client.tsx";
+            imports[key] = ShortPaths.Client;
         }
     }
 }
-catch(e) { console.log(`Amber Start: (ERROR) loading import map "${options.Import}" ${e}`); }
+catch(e) { console.log(`Amber Start: (ERROR) loading import map "${FullPaths.Import}" ${e}`); }
 
 /// Any Mode: load the tailwind config settings
 try
 {
-    const twindImport = await import(`file://${options.Active}/${options.Themed}`);
+    const twindImport = await import(FullPaths.Themed);
     if(twindImport.default)
     {
         Loaded.Themed.plugins = twindImport.default.plugins??{};
         Loaded.Themed.theme = twindImport.default.theme??{};
     }
 }
-catch(e) { console.log(`Amber Start: (ERROR) loading twind config "${options.Themed}" ${e}`) }
+catch(e) { console.log(`Amber Start: (ERROR) loading twind config "${FullPaths.Themed}" ${e}`) }
 
 /// Any Mode: load App and Shell
 try
 {
-    const appImport = await import(`file://${options.Active}/${options.Client}/${options.Launch}`);
+    const appImport = await import(FullPaths.Launch);
     Loaded.Launch.App = appImport.default;
     if(appImport.Shell)
     {
         Loaded.Launch.Shell = appImport.Shell;
     }
 }
-catch(e) { console.log(e); console.log(`Amber Start: (ERROR) Launch App "${options.Launch}" cound not be found in Client directory "${options.Active}/${options.Client}/"`, e); }
+catch(e) { console.log(e); console.log(`Amber Start: (ERROR) loading launch app "${FullPaths.Launch}"`, e); }
 
 /// Server Mode: Render react app
 const SSR =async(inURL:URL):Promise<ReactDOMServer.ReactDOMServerReadableStream>=>
@@ -185,73 +275,15 @@ serve(async(inRequest)=>
     const url = new URL(inRequest.url);
 
     /// Create Mode: all /hmr-* routes are for hot module reloading
-    if(url.pathname == "/hmr-source")
+    if(url.pathname == ShortPaths.HMRSource)
     {
-        return new Response(`
-        let reloads = 0;
-        const socket = new WebSocket("ws://"+document.location.host+"/hmr-listen");
-        socket.addEventListener('message', (event) =>
-        {
-            const members = listeners.get(event.data)??[];
-            reloads++;
-            Promise.all(
-                members.map(m=>
-                {
-                    return import(event.data+"?reload="+reloads)
-                    .then(updatedModule=>m(updatedModule));
-                })
-            ).then(()=>
-            {
-                const members = listeners.get("reload-complete")??[];
-                members.forEach(m=>m());
-            });
-        });
-        
-        const listeners = new Map();
-        export default (path, handler)=>
-        {
-            const members = listeners.get(path)??[];
-            members.push(handler);
-            listeners.set(path, members);
-        };`, {status:200, headers:{"content-type":"application/javascript"}});
+        return new Response(LitCode.HMRSource, {status:200, headers:{"content-type":"application/javascript"}});
     }
-    if(url.pathname == "/hmr-react-proxy")
+    if(url.pathname == ShortPaths.HMRReactProxy)
     {
-        return new Response(`
-        import * as ReactParts from "react-alias";
-
-        window.HMR = { registered:new Map() };
-        window.HMR.onChange =(key, value)=>
-        {
-            window.HMR.registered.set(key, value);
-        };
-        window.HMR.update =()=>
-        {
-            const keys = [];
-            for(const [key, value] of window.HMR.registered){ keys.push(key); }
-            window.HMR.registered.clear();
-            keys.forEach(k=>k());
-        };
-        
-        const ProxyElement =(props)=>
-        {
-            const [stateGet, stateSet] = ReactParts.useState(0);
-            ReactParts.useEffect(()=>window.HMR.onChange( ()=>stateSet(stateGet+1), "yep" ));
-        
-            return ReactParts.createElement(props.children.type, {...props.children.props, _proxy:Math.random()})
-        };
-        
-        const ProxyCreate =(...args)=>
-        {
-            const el = ReactParts.createElement(...args)
-            return typeof args[0] != "string" ? ReactParts.createElement(ProxyElement, null, el) : el;
-        };
-        
-        export * from "react-alias";
-        export default ReactParts.default;
-        export { ProxyCreate as createElement };`, {status:200, headers:{"content-type":"application/javascript"}});
+        return new Response(LitCode.HMRReactProxy, {status:200, headers:{"content-type":"application/javascript"}});
     }
-    if(url.pathname == "/hmr-listen")
+    if(url.pathname == ShortPaths.HMRListen)
     {
         try
         {
@@ -366,7 +398,7 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
         {
             const split = code.lastIndexOf("//# sourceMappingURL=");
             const wentIn = code.substring(0, split);
-            const proxy = await HMRProxy(webPath);
+            const proxy = await LitCode.HMRModuleProxy(webPath);
 
             localStorage.setItem(webPath, wentIn);
             localStorage.setItem(webPath+".map", code.substring(split));
@@ -386,19 +418,6 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
             await WriteMemory(code, isTranspiled);
         }
     };
-    const HMRProxy = async(inModule:string):Promise<string>=>
-    {
-        const imp = await import("file://"+options.Active+inModule);
-        const members = [];
-        for( const key in imp ) { members.push(key); }
-        return `
-        import * as Import from "${inModule}?reload=0";
-        import Reloader from "/hmr-source";
-        ${ members.map(m=>`let proxy_${m} = Import.${m}; export { proxy_${m} as ${m} };`).join(" ") }
-        const reloadHandler = (updatedModule)=>{ ${ members.map(m=>`proxy_${m} = updatedModule.${m};`).join(" ") }};
-        Reloader("${inModule}", reloadHandler);`;
-    };
-
 
 
     if(isTranspiled)
