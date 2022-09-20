@@ -3,15 +3,18 @@ import React from "react";
 export type CacheRecord = { Data:false|string, Error:boolean, Expiry:number|false, Pending:boolean };
 export type CacheQueue = Array<Promise<void>>;
 export type KeyedMeta = {Title?:string, Description?:string, Image?:string, Icon?:string};
+export type KeyedMetaID = {ID:string, Meta:KeyedMeta}
 export type KeyedData = {[key:string]:CacheRecord};
 export type Path = {
     Parts:Array<string>,
     Query:{[key:string]:string},
     Hash:string
 };
-export type State = { Meta:KeyedMeta, Data:KeyedData, Path:Path, Client:boolean, Queue:CacheQueue };
+export type State = { Meta:KeyedMeta, MetaStack:Array<KeyedMetaID>, Data:KeyedData, Path:Path, Client:boolean, Queue:CacheQueue };
 export type Actions
 = {type: "MetaReplace", payload: KeyedMeta }
+| {type: "MetaAdd", payload: KeyedMetaID }
+| {type: "MetaRemove", payload: string }
 | {type: "DataReplace", payload: [key:string, value:CacheRecord] }
 | {type: "PathReplace", payload: Path }
 
@@ -22,6 +25,7 @@ export type AppComponent = ()=>JSX.Element;
 
 const InitialState:State = {
     Meta:{},
+    MetaStack:[],
     Data:{},
     Path:{Parts:[""], Query:{}, Hash:""},
     Client:false,
@@ -56,6 +60,37 @@ const Reducer =(inState:State, inAction:Actions)=>
             break;
         case "DataReplace" :
             output = { ...inState, Data: { ...inState.Data, [inAction.payload[0]]: inAction.payload[1] } };
+            break;
+        case "MetaAdd" :
+        {
+            const clone = [...inState.MetaStack];
+            if(clone.length > 0)
+            {
+                const leading = clone[clone.length-1];
+                inAction.payload.Meta = {...leading.Meta, ...inAction.payload.Meta};
+            }
+            clone.push(inAction.payload);
+            output = { ...inState, MetaStack:clone, Meta:inAction.payload.Meta};
+            break;
+        }
+        case "MetaRemove" :
+        {
+            const clone = [...inState.MetaStack];
+            for(let i=0; i<clone.length; i++)
+            {
+                if(clone[i].ID == inAction.payload)
+                {
+                    clone.splice(i, 1);
+                    break;
+                }
+            }
+            output = { ...inState, MetaStack:clone };
+            if(clone.length > 0)
+            {
+                output.Meta = clone[clone.length-1].Meta;
+            }
+            break;
+        }
     }
     return output;
 };
@@ -103,6 +138,40 @@ export const IsoProvider =({seed, children}:{seed:State, children:React.ReactNod
 };
 
 
+const MetaStack:Array<{id:number, meta:KeyedMeta}> = [];
+const MetaStackUpdate =()=>
+{
+    console.log(MetaStack);
+}
+const MetaStackAdd =(inItem:{id:number, meta:KeyedMeta})=>
+{
+    if(MetaStack.length == 0)
+    {
+        MetaStack.push(inItem);
+    }
+    else
+    {
+        const leading = MetaStack[MetaStack.length-1];
+        inItem.meta = {...leading.meta, ...inItem.meta};
+        MetaStack.push(inItem);
+    }
+    MetaStackUpdate();
+};
+const MetaStackRemove =(inId:number)=>
+{
+    for(let i=0; i<MetaStack.length; i++)
+    {
+        const cur = MetaStack[i];
+        if(cur.id == inId)
+        {
+            MetaStack.splice(i, 1);
+            MetaStackUpdate();
+            return true;
+        }
+    }
+    return false;
+};
+
 export function useRoute():[get:Path, set:(path:Path)=>void]
 {   
     const [state, dispatch] = React.useContext(IsoContext);
@@ -114,10 +183,22 @@ export function useMetas():KeyedMeta;
 export function useMetas(arg?:KeyedMeta):KeyedMeta|void
 {   
     const [state, dispatch] = React.useContext(IsoContext);
+    const id = React.useId();
     if(arg)
     {
-        const action:Actions = {type:"MetaReplace", payload: arg };
-        state.Client ? React.useEffect(()=>dispatch(action), []) : dispatch(action);
+        const action:Actions = {type:"MetaAdd", payload: {ID:id, Meta:arg }};
+        if(!state.Client)
+        {
+            dispatch(action);
+        }
+        else
+        {
+            React.useEffect(()=>
+            {
+                dispatch(action);
+                return ()=>{dispatch({type:"MetaRemove", payload:id});};
+            }, []);
+        }
     }
     return state.Meta;
 }
