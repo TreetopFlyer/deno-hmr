@@ -25,7 +25,7 @@ const Search = React.lazy(()=>import("./Search.tsx"));
 
 export default ()=>
 {
-    const [routeGet, routeSet, routeTest] = useRoute();
+    const [routeGet] = useRoute();
     const [stateGet, stateSet] = React.useState(4);
 
     const folder = routeGet.Parts.length ? routeGet.Parts[0] : "";
@@ -40,6 +40,7 @@ export default ()=>
         <a className={`text-white p-2 ${highlight("about")}`} href="/about">About</a>
         <a className={`text-white p-2 ${highlight("blog")}`} href="/blog">Blog</a>
         <a className={`text-white p-2 ${highlight("search")}`} href="/search">Search</a>
+        <a className={`text-white p-2 ${highlight("404")}`} href="/404">404</a>
     </nav> 
     <div className="p-4 border border-red-500">
         <>
@@ -69,6 +70,10 @@ export default ()=>
         <Switch value={routeGet}>
             <Case value={`/about`}>
                 <p>about matched!!!!!</p>
+                <nav>
+                    <a className="p-4 mr-2" href="/about/me">me</a>
+                    <a className="p-4 mr-2" href="/about/us">us</a>
+                </nav>
                 <Switch value={routeGet}>
                     <Case value={`/me`}>
                         <p>its all about me</p>

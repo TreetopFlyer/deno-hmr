@@ -53,14 +53,16 @@ const Reducer =(inState:State, inAction:Actions)=>
                 }
             };
             break;
-        case "MetaReplace" :
-            output = {...inState, Meta:inAction.payload};
-            break;
         case "DataReplace" :
             output = { ...inState, Data: { ...inState.Data, [inAction.payload[0]]: inAction.payload[1] } };
             break;
+        case "MetaReplace" :
+            console.log("meta replace");
+            output = {...inState, Meta:inAction.payload};
+            break;
         case "MetaAdd" :
         {
+            console.log("meta add");
             const clone = [...inState.MetaStack];
             if(clone.length > 0)
             {
@@ -73,6 +75,7 @@ const Reducer =(inState:State, inAction:Actions)=>
         }
         case "MetaRemove" :
         {
+            console.log("meta remove");
             const clone = [...inState.MetaStack];
             for(let i=0; i<clone.length; i++)
             {
@@ -90,6 +93,7 @@ const Reducer =(inState:State, inAction:Actions)=>
             break;
         }
     }
+    console.log(output.MetaStack);
     return output;
 };
 
@@ -149,17 +153,23 @@ export function useMetas(arg?:KeyedMeta):KeyedMeta|void
     const id = React.useId();
     if(arg)
     {
+        console.log("useMetas called", arg.Title, id);
         const action:Actions = {type:"MetaAdd", payload: {ID:id, Meta:arg }};
         if(!state.Client)
         {
             dispatch(action);
+
         }
         else
         {
             React.useEffect(()=>
             {
-                dispatch(action);
-                return ()=>{dispatch({type:"MetaRemove", payload:id});};
+                if(state.Client)
+                {
+                    dispatch(action);
+                    console.log("useMetas dispatching!", arg.Title, id);
+                    return ()=>{dispatch({type:"MetaRemove", payload:id});};
+                }
             }, []);
         }
     }
@@ -214,8 +224,6 @@ const RouteTemplateTest =(inPath:Path, inDepth:number, inTemplate:string):false|
     const url = new URL("http://h"+inTemplate);
     const path = inPath.Parts.slice(inDepth);
     const test = url.pathname.substring(1).split("/");
-
-    console.log("cheking", path, test);
 
     const vars:Record<string, string> = {};
     if(test.length > path.length)
@@ -274,12 +282,15 @@ export const Switch =({ children, value }: { children: JSX.Element | JSX.Element
                 child = children[i];
                 if (child.props?.value == value)
                 {
-                    break;
+                    return child.props.children;
                 }
             }
         }
         // only return the last case as a default if it has no value prop
-        return child.props?.value ? null : child.props.children;
+        if(!child.props?.value)
+        {
+            return child.props.children;
+        }
     }, [value]);
 };
 export const Case = (

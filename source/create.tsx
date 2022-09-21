@@ -37,6 +37,9 @@ for(let i=0; i<Deno.args.length; i++)
         else if(key == "--server"){ options.Server = true; }
     }
 }
+
+const XPileOptions = options.Server ? {loader:"tsx", minify:true} : {loader:"tsx", sourcemap:"inline", minify:false};
+
 export type LoadedResources = {
     Import:{imports:{[key:string]:string}},
     Themed:{theme:Twind.ThemeConfiguration, plugins:Record<string, Twind.Plugin | undefined>},
@@ -373,7 +376,7 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
             const code = await Deno.readTextFile(inFullProjectPath);
             if(isTranspiled)
             {
-                const parsed = await ESBuild.transform(code, {loader:"tsx", minify:true});
+                const parsed = await ESBuild.transform(code, XPileOptions);
                 const proxy = await LitCode.HMRModuleProxy(webPath);
                 localStorage.setItem(webPath, parsed.code);
                 localStorage.setItem(webPath+".pxy", proxy);
@@ -428,7 +431,7 @@ for await (const entry of walk(options.Active+"\\"+options.Client, {includeDirs:
 const path = import.meta.url.split("/").slice(0, -2).join("/")+RoutePaths.Amber;
 const amberClientFetch = await fetch(path);
 const amberClientText = await amberClientFetch.text();
-const amberClientParsed = await ESBuild.transform(amberClientText, {loader:"tsx", minify:true});
+const amberClientParsed = await ESBuild.transform(amberClientText, XPileOptions);
 localStorage.setItem(RoutePaths.Amber, amberClientParsed.code);
 
 if(!options.Server)
