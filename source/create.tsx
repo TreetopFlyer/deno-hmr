@@ -324,7 +324,7 @@ serve(async(inRequest)=>
     }
     else
     {
-        const isoModel:State = { Meta:{}, Data:{}, Path:PathParse(url), Client:false, Queue:[] }
+        const isoModel:State = { Meta:{}, MetaStack:[], Data:{}, Path:PathParse(url), Client:false, Queue:[] }
         /// Server Mode: Render react app
         let bake = options.Server ? ReactDOMServer.renderToString(<IsoProvider seed={isoModel}><Loaded.Launch.App/></IsoProvider>) : "dev mode loading";
         let count = 0;

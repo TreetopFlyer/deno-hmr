@@ -1,17 +1,21 @@
+import { string } from "https://esm.sh/v95/@types/prop-types@15.7.5/index.d.ts";
 import React from "react";
 
 export type CacheRecord = { Data:false|string, Error:boolean, Expiry:number|false, Pending:boolean };
 export type CacheQueue = Array<Promise<void>>;
 export type KeyedMeta = {Title?:string, Description?:string, Image?:string, Icon?:string};
+export type KeyedMetaID = {ID:string, Meta:KeyedMeta}
 export type KeyedData = {[key:string]:CacheRecord};
 export type Path = {
     Parts:Array<string>,
     Query:{[key:string]:string},
     Hash:string
 };
-export type State = { Meta:KeyedMeta, Data:KeyedData, Path:Path, Client:boolean, Queue:CacheQueue };
+export type State = { Meta:KeyedMeta, MetaStack:Array<KeyedMetaID>, Data:KeyedData, Path:Path, Client:boolean, Queue:CacheQueue };
 export type Actions
 = {type: "MetaReplace", payload: KeyedMeta }
+| {type: "MetaAdd", payload: KeyedMetaID }
+| {type: "MetaRemove", payload: string }
 | {type: "DataReplace", payload: [key:string, value:CacheRecord] }
 | {type: "PathReplace", payload: Path }
 
@@ -22,6 +26,7 @@ export type AppComponent = ()=>JSX.Element;
 
 const InitialState:State = {
     Meta:{},
+    MetaStack:[],
     Data:{},
     Path:{Parts:[""], Query:{}, Hash:""},
     Client:false,
@@ -38,12 +43,9 @@ const Reducer =(inState:State, inAction:Actions)=>
                 ...inState,
                 Path:
                 {
-                    ...inState.Path,
-                    Parts:
-                    [
-                        ...inAction.payload.Parts
-                    ],
-                    Query:
+                    Parts: inAction.payload.Parts??inState.Path.Parts,
+                    Hash: inAction.payload.Hash??inState.Path.Hash,
+                    Query: 
                     {
                         ...inState.Path.Query,
                         ...inAction.payload.Query
@@ -56,6 +58,37 @@ const Reducer =(inState:State, inAction:Actions)=>
             break;
         case "DataReplace" :
             output = { ...inState, Data: { ...inState.Data, [inAction.payload[0]]: inAction.payload[1] } };
+            break;
+        case "MetaAdd" :
+        {
+            const clone = [...inState.MetaStack];
+            if(clone.length > 0)
+            {
+                const leading = clone[clone.length-1];
+                inAction.payload.Meta = {...leading.Meta, ...inAction.payload.Meta};
+            }
+            clone.push(inAction.payload);
+            output = { ...inState, MetaStack:clone, Meta:inAction.payload.Meta};
+            break;
+        }
+        case "MetaRemove" :
+        {
+            const clone = [...inState.MetaStack];
+            for(let i=0; i<clone.length; i++)
+            {
+                if(clone[i].ID == inAction.payload)
+                {
+                    clone.splice(i, 1);
+                    break;
+                }
+            }
+            output = { ...inState, MetaStack:clone };
+            if(clone.length > 0)
+            {
+                output.Meta = clone[clone.length-1].Meta;
+            }
+            break;
+        }
     }
     return output;
 };
@@ -102,7 +135,6 @@ export const IsoProvider =({seed, children}:{seed:State, children:React.ReactNod
     </IsoContext.Provider>;
 };
 
-
 export function useRoute():[get:Path, set:(path:Path)=>void]
 {   
     const [state, dispatch] = React.useContext(IsoContext);
@@ -114,10 +146,22 @@ export function useMetas():KeyedMeta;
 export function useMetas(arg?:KeyedMeta):KeyedMeta|void
 {   
     const [state, dispatch] = React.useContext(IsoContext);
+    const id = React.useId();
     if(arg)
     {
-        const action:Actions = {type:"MetaReplace", payload: arg };
-        state.Client ? React.useEffect(()=>dispatch(action), []) : dispatch(action);
+        const action:Actions = {type:"MetaAdd", payload: {ID:id, Meta:arg }};
+        if(!state.Client)
+        {
+            dispatch(action);
+        }
+        else
+        {
+            React.useEffect(()=>
+            {
+                dispatch(action);
+                return ()=>{dispatch({type:"MetaRemove", payload:id});};
+            }, []);
+        }
     }
     return state.Meta;
 }
@@ -165,23 +209,79 @@ const Effects =()=>
     return null;
 };
 
-export const Switch = (
-	{ children, value }: { children: JSX.Element | JSX.Element[]; value: string },
-) => {
-	return React.useMemo(() => {
-		const lower = value.toLowerCase();
+const RouteTemplateTest =(inPath:Path, inDepth:number, inTemplate:string):false|SwitchStatus=>
+{
+    const url = new URL("http://h"+inTemplate);
+    const path = inPath.Parts.slice(inDepth);
+    const test = url.pathname.substring(1).split("/");
+
+    console.log("cheking", path, test);
+
+    const vars:Record<string, string> = {};
+    if(test.length > path.length)
+    {
+        return false;
+    }
+    for(let i=0; i<test.length; i++)
+    {
+        const partTest = test[i];
+        const partPath = path[i];
+        if(partTest[0] == ":")
+        {
+            vars[partTest.substring(1)] = partPath;
+        }
+        else if(partTest != partPath)
+        {
+            return false;
+        }
+    }
+    return {Depth:test.length+inDepth, Params:vars};
+}
+
+export type SwitchStatus = {Depth:number, Params:Record<string, string>}
+export const SwitchContext:React.Context<SwitchStatus> = React.createContext({Depth:0, Params:{}});
+export type SwitchValue = string|number|boolean
+export const Switch =({ children, value }: { children: JSX.Element | JSX.Element[]; value:SwitchValue|Path  })=>
+{
+    const ctx = React.useContext(SwitchContext);
+	return React.useMemo(() =>
+    {
 		let child = <></>;
-		if (!Array.isArray(children)) {
+		if (!Array.isArray(children))
+        {
 			children = [children];
 		}
-		for (let i = 0; i < children.length; i++) {
-			child = children[i];
-			if (child.props?.value?.toLowerCase() == lower) break;
-		}
-
-		return child.props.children;
-	}, [value]);
+        if(typeof value == "object")
+        {
+            for (let i = 0; i < children.length; i++)
+            {
+                child = children[i];
+                if (child.props?.value)
+                {
+                    const test = RouteTemplateTest(value, ctx.Depth??0, child.props.value);
+                    if(test)
+                    {
+                        test.Params = {...ctx.Params, ...test.Params};
+                        return <SwitchContext.Provider value={test}>{child.props.children}</SwitchContext.Provider>
+                    }
+                }
+            }
+        }
+        else
+        {
+            for (let i = 0; i < children.length; i++)
+            {
+                child = children[i];
+                if (child.props?.value == value)
+                {
+                    break;
+                }
+            }
+        }
+        // only return the last case as a default if it has no value prop
+        return child.props?.value ? null : child.props.children;
+    }, [value]);
 };
 export const Case = (
-	{ value, children }: { value?: string; children: React.ReactNode },
+	{ value, children }: { value?: SwitchValue; children: React.ReactNode },
 ) => null;
