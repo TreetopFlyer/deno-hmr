@@ -62,20 +62,18 @@ const Reducer =(inState:State, inAction:Actions)=>
             break;
         case "MetaAdd" :
         {
-            console.log("meta add");
-            const clone = [...inState.MetaStack];
-            if(clone.length > 0)
+            if(inState.MetaStack.length > 0)
             {
-                const leading = clone[clone.length-1];
+                const leading = inState.MetaStack[inState.MetaStack.length-1];
                 inAction.payload.Meta = {...leading.Meta, ...inAction.payload.Meta};
             }
-            clone.push(inAction.payload);
-            output = { ...inState, MetaStack:clone, Meta:inAction.payload.Meta};
+            inState.MetaStack.push(inAction.payload);
+            output = { ...inState, Meta:inAction.payload.Meta};
+            console.log("meta add", output.MetaStack, output.Meta.Title);
             break;
         }
         case "MetaRemove" :
         {
-            console.log("meta remove");
             const clone = [...inState.MetaStack];
             for(let i=0; i<clone.length; i++)
             {
@@ -90,10 +88,10 @@ const Reducer =(inState:State, inAction:Actions)=>
             {
                 output.Meta = clone[clone.length-1].Meta;
             }
+            console.log("meta remove", output.MetaStack);
             break;
         }
     }
-    console.log(output.MetaStack);
     return output;
 };
 

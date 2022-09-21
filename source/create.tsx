@@ -56,6 +56,7 @@ export const Loaded:LoadedResources =
                 <head>
                     <title>{isoModel.Meta.Title??""}</title>
                     <link rel="canonical" href={isoModel.Path.Parts.join("/")}></link>
+                    <link rel="icon" type="image/x-icon" href="/static/favicon.ico"></link>
                     <meta name="viewport" content="width=device-width, initial-scale=1"/>
                     <meta name="description" content={isoModel.Meta.Description??""}/>
                     <style id="tw-main" dangerouslySetInnerHTML={{__html:styles}}/>
@@ -310,6 +311,7 @@ const FileRoutes = options.Server ?
 serve(async(inRequest)=>
 {
     const url = new URL(inRequest.url);
+    console.log(`--- ${url.pathname} ---`)
     const file:Response|false = FileRoutes(url, inRequest);
     if(file)
     {
@@ -330,6 +332,7 @@ serve(async(inRequest)=>
         const isoModel:State = { Meta:{}, MetaStack:[], Data:{}, Path:PathParse(url), Client:false, Queue:[] }
         /// Server Mode: Render react app
         let bake = options.Server ? ReactDOMServer.renderToString(<IsoProvider seed={isoModel}><Loaded.Launch.App/></IsoProvider>) : "dev mode loading";
+        isoModel.MetaStack = [];
         let count = 0;
         while(isoModel.Queue.length)
         {
@@ -338,6 +341,7 @@ serve(async(inRequest)=>
             await Promise.all(isoModel.Queue);
             isoModel.Queue = [];
             bake = ReactDOMServer.renderToString(<IsoProvider seed={isoModel}><Loaded.Launch.App/></IsoProvider>);
+            isoModel.MetaStack = [];
         }
         isoModel.Client = true;
         const stream = await ReactDOMServer.renderToReadableStream(
