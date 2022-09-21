@@ -1,3 +1,4 @@
+import { string } from "https://esm.sh/v95/@types/prop-types@15.7.5/index.d.ts";
 import React from "react";
 
 export type CacheRecord = { Data:false|string, Error:boolean, Expiry:number|false, Pending:boolean };
@@ -42,12 +43,9 @@ const Reducer =(inState:State, inAction:Actions)=>
                 ...inState,
                 Path:
                 {
-                    ...inState.Path,
-                    Parts:
-                    [
-                        ...inAction.payload.Parts
-                    ],
-                    Query:
+                    Parts: inAction.payload.Parts??inState.Path.Parts,
+                    Hash: inAction.payload.Hash??inState.Path.Hash,
+                    Query: 
                     {
                         ...inState.Path.Query,
                         ...inAction.payload.Query
@@ -137,41 +135,6 @@ export const IsoProvider =({seed, children}:{seed:State, children:React.ReactNod
     </IsoContext.Provider>;
 };
 
-
-const MetaStack:Array<{id:number, meta:KeyedMeta}> = [];
-const MetaStackUpdate =()=>
-{
-    console.log(MetaStack);
-}
-const MetaStackAdd =(inItem:{id:number, meta:KeyedMeta})=>
-{
-    if(MetaStack.length == 0)
-    {
-        MetaStack.push(inItem);
-    }
-    else
-    {
-        const leading = MetaStack[MetaStack.length-1];
-        inItem.meta = {...leading.meta, ...inItem.meta};
-        MetaStack.push(inItem);
-    }
-    MetaStackUpdate();
-};
-const MetaStackRemove =(inId:number)=>
-{
-    for(let i=0; i<MetaStack.length; i++)
-    {
-        const cur = MetaStack[i];
-        if(cur.id == inId)
-        {
-            MetaStack.splice(i, 1);
-            MetaStackUpdate();
-            return true;
-        }
-    }
-    return false;
-};
-
 export function useRoute():[get:Path, set:(path:Path)=>void]
 {   
     const [state, dispatch] = React.useContext(IsoContext);
@@ -246,23 +209,79 @@ const Effects =()=>
     return null;
 };
 
-export const Switch = (
-	{ children, value }: { children: JSX.Element | JSX.Element[]; value: string },
-) => {
-	return React.useMemo(() => {
-		const lower = value.toLowerCase();
+const RouteTemplateTest =(inPath:Path, inDepth:number, inTemplate:string):false|SwitchStatus=>
+{
+    const url = new URL("http://h"+inTemplate);
+    const path = inPath.Parts.slice(inDepth);
+    const test = url.pathname.substring(1).split("/");
+
+    console.log("cheking", path, test);
+
+    const vars:Record<string, string> = {};
+    if(test.length > path.length)
+    {
+        return false;
+    }
+    for(let i=0; i<test.length; i++)
+    {
+        const partTest = test[i];
+        const partPath = path[i];
+        if(partTest[0] == ":")
+        {
+            vars[partTest.substring(1)] = partPath;
+        }
+        else if(partTest != partPath)
+        {
+            return false;
+        }
+    }
+    return {Depth:test.length+inDepth, Params:vars};
+}
+
+export type SwitchStatus = {Depth:number, Params:Record<string, string>}
+export const SwitchContext:React.Context<SwitchStatus> = React.createContext({Depth:0, Params:{}});
+export type SwitchValue = string|number|boolean
+export const Switch =({ children, value }: { children: JSX.Element | JSX.Element[]; value:SwitchValue|Path  })=>
+{
+    const ctx = React.useContext(SwitchContext);
+	return React.useMemo(() =>
+    {
 		let child = <></>;
-		if (!Array.isArray(children)) {
+		if (!Array.isArray(children))
+        {
 			children = [children];
 		}
-		for (let i = 0; i < children.length; i++) {
-			child = children[i];
-			if (child.props?.value?.toLowerCase() == lower) break;
-		}
-
-		return child.props.children;
-	}, [value]);
+        if(typeof value == "object")
+        {
+            for (let i = 0; i < children.length; i++)
+            {
+                child = children[i];
+                if (child.props?.value)
+                {
+                    const test = RouteTemplateTest(value, ctx.Depth??0, child.props.value);
+                    if(test)
+                    {
+                        test.Params = {...ctx.Params, ...test.Params};
+                        return <SwitchContext.Provider value={test}>{child.props.children}</SwitchContext.Provider>
+                    }
+                }
+            }
+        }
+        else
+        {
+            for (let i = 0; i < children.length; i++)
+            {
+                child = children[i];
+                if (child.props?.value == value)
+                {
+                    break;
+                }
+            }
+        }
+        // only return the last case as a default if it has no value prop
+        return child.props?.value ? null : child.props.children;
+    }, [value]);
 };
 export const Case = (
-	{ value, children }: { value?: string; children: React.ReactNode },
+	{ value, children }: { value?: SwitchValue; children: React.ReactNode },
 ) => null;

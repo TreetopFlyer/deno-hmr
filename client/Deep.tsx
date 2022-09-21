@@ -25,7 +25,7 @@ const Search = React.lazy(()=>import("./Search.tsx"));
 
 export default ()=>
 {
-    const [routeGet] = useRoute();
+    const [routeGet, routeSet, routeTest] = useRoute();
     const [stateGet, stateSet] = React.useState(4);
 
     const folder = routeGet.Parts.length ? routeGet.Parts[0] : "";
@@ -63,6 +63,20 @@ export default ()=>
             </Case>
             <Case>
                 <p>404 i guess</p>
+            </Case>
+        </Switch>
+
+        <Switch value={routeGet}>
+            <Case value={`/about`}>
+                <p>about matched!!!!!</p>
+                <Switch value={routeGet}>
+                    <Case value={`/me`}>
+                        <p>its all about me</p>
+                    </Case>
+                    <Case value={`/us`}>
+                        <p>its a we thang</p>
+                    </Case>
+                </Switch>
             </Case>
         </Switch>
     </div>
