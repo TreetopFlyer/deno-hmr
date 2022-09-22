@@ -1,10 +1,11 @@
 import { string } from "https://esm.sh/v95/@types/prop-types@15.7.5/index.d.ts";
+import { useEffect } from "https://esm.sh/v95/@types/react@18.0.18/index.d.ts";
 import React from "react";
 
 export type CacheRecord = { Data:false|string, Error:boolean, Expiry:number|false, Pending:boolean };
 export type CacheQueue = Array<Promise<void>>;
 export type KeyedMeta = {Title?:string, Description?:string, Image?:string, Icon?:string};
-export type KeyedMetaID = {ID:string, Meta:KeyedMeta}
+export type KeyedMetaID = {ID:string, Meta:KeyedMeta, Time:number}
 export type KeyedData = {[key:string]:CacheRecord};
 export type Path = {
     Parts:Array<string>,
@@ -68,6 +69,9 @@ const Reducer =(inState:State, inAction:Actions)=>
                 inAction.payload.Meta = {...leading.Meta, ...inAction.payload.Meta};
             }
             inState.MetaStack.push(inAction.payload);
+            inState.MetaStack.sort((a, b)=>{
+                return a.Time - b.Time;
+            })
             output = { ...inState, Meta:inAction.payload.Meta};
             console.log("meta add", output.MetaStack, output.Meta.Title);
             break;
@@ -143,34 +147,37 @@ export function useRoute():[get:Path, set:(path:Path)=>void]
     return [state.Path, (arg:Path)=>dispatch({type:"PathReplace", payload: arg })];
 }
 
-export function useMetas(arg:KeyedMeta):void;
-export function useMetas():KeyedMeta;
-export function useMetas(arg?:KeyedMeta):KeyedMeta|void
+let useMetaOrder = 0;
+export function useMetas(arg?:KeyedMeta):KeyedMeta
 {   
     const [state, dispatch] = React.useContext(IsoContext);
     const id = React.useId();
+    const stamp = ++useMetaOrder;
+
     if(arg)
     {
         console.log("useMetas called", arg.Title, id);
-        const action:Actions = {type:"MetaAdd", payload: {ID:id, Meta:arg }};
+        const action:Actions = {type:"MetaAdd", payload: { ID:id, Meta:arg, Time:stamp }};
         if(!state.Client)
         {
-            dispatch(action);
-
+            console.log("server-sid dispatch");
+            //dispatch(action);
         }
-        else
+        React.useEffect(()=>
         {
-            React.useEffect(()=>
+            if(state.Client)
             {
-                if(state.Client)
+                dispatch(action);
+                console.log("useMetas dispatching add!", arg.Title, id);
+                return ()=>
                 {
-                    dispatch(action);
-                    console.log("useMetas dispatching!", arg.Title, id);
-                    return ()=>{dispatch({type:"MetaRemove", payload:id});};
-                }
-            }, []);
-        }
+                    console.log("useMetas dispatching remove!", arg.Title, id);
+                    dispatch({type:"MetaRemove", payload:id});
+                };
+            }
+        }, [id]);
     }
+
     return state.Meta;
 }
 export const useFetch =(url:string):CacheRecord=>
@@ -216,6 +223,25 @@ const Effects =()=>
     }, []);
     return null;
 };
+
+/*
+type MetaContextBinding = [get:KeyedMeta, set:React.Dispatch<React.SetStateAction<KeyedMeta>>];
+export const MetaContext = React.createContext([{Title:"default"}, (arg:KeyedMeta)=>{}] as MetaContextBinding);
+export const MetaContextLayer =({children}:{children:JSX.Element | JSX.Element[]})=>
+{
+    const [stateGet, stateSet] = React.useState({} as KeyedMeta);
+    return <MetaContext.Provider value={[stateGet, stateSet]}>{children}</MetaContext.Provider>;
+};
+export const Meta =({title}:{title:string})=>
+{
+    const [stateGet, stateSet] = React.useContext(MetaContext);
+    React.useEffect(()=>
+    {
+        stateSet({Title:title});
+    }, []);
+    return null;
+};
+*/
 
 const RouteTemplateTest =(inPath:Path, inDepth:number, inTemplate:string):false|SwitchStatus=>
 {

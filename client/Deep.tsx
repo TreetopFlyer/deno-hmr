@@ -13,13 +13,33 @@ const PartBlog =()=>
 
 const PartAbout =()=>
 {
+    const [routeGet] = useRoute();
     useMetas({Title:"About!"});
 
     return <div>
         <h3 className="text-xl font(black sans) p-4">About!</h3>
         <p>about section</p>
+        <nav>
+            <a className="p-4 mr-2" href="/about/me">me</a>
+            <a className="p-4 mr-2" href="/about/us">us</a>
+        </nav>
+        <Switch value={routeGet}>
+        <Case value={`/me`}>
+            <PartMe/>
+        </Case>
+        <Case value={`/us`}>
+            <p>its a we thang</p>
+        </Case>
+    </Switch>
     </div>;
+
 };
+
+const PartMe =()=>
+{
+    useMetas({Title:"MEEE"});
+    return <p>me</p>;
+}
 
 const Search = React.lazy(()=>import("./Search.tsx"));
 
@@ -47,15 +67,13 @@ export default ()=>
             {status.Data}
         </>
     </div>
+
         <Switch value={routeGet.Parts[0]}>
             <Case value={""}>
                 <img src="static/Logo.svg" />
             </Case>
             <Case value={"blog"}>
                 <PartBlog />
-            </Case>
-            <Case value={"about"}>
-                <PartAbout />
             </Case>
             <Case value={"search"}>
                 <React.Suspense fallback={<div>Loading Search Component</div>}>
@@ -70,18 +88,7 @@ export default ()=>
         <Switch value={routeGet}>
             <Case value={`/about`}>
                 <p>about matched!!!!!</p>
-                <nav>
-                    <a className="p-4 mr-2" href="/about/me">me</a>
-                    <a className="p-4 mr-2" href="/about/us">us</a>
-                </nav>
-                <Switch value={routeGet}>
-                    <Case value={`/me`}>
-                        <p>its all about me</p>
-                    </Case>
-                    <Case value={`/us`}>
-                        <p>its a we thang</p>
-                    </Case>
-                </Switch>
+                <PartAbout/>
             </Case>
         </Switch>
     </div>
