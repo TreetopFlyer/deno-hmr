@@ -19,20 +19,7 @@ const PartAbout =()=>
     return <div>
         <h3 className="text-xl font(black sans) p-4">About!</h3>
         <p>about section</p>
-        <nav>
-            <a className="p-4 mr-2" href="/about/me">me</a>
-            <a className="p-4 mr-2" href="/about/us">us</a>
-        </nav>
-        <Switch value={routeGet}>
-        <Case value={`/me`}>
-            <PartMe/>
-        </Case>
-        <Case value={`/us`}>
-            <p>its a we thang</p>
-        </Case>
-    </Switch>
     </div>;
-
 };
 
 const PartMe =()=>
@@ -89,6 +76,18 @@ export default ()=>
             <Case value={`/about`}>
                 <p>about matched!!!!!</p>
                 <PartAbout/>
+                <nav>
+                    <a className="p-4 mr-2" href="/about/me">me</a>
+                    <a className="p-4 mr-2" href="/about/us">us</a>
+                </nav>
+                <Switch value={routeGet}>
+                    <Case value={`/me`}>
+                        <PartMe/>
+                    </Case>
+                    <Case value={`/us`}>
+                        <p>its a we thang</p>
+                    </Case>
+                </Switch>
             </Case>
         </Switch>
     </div>

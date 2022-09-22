@@ -58,7 +58,6 @@ const Reducer =(inState:State, inAction:Actions)=>
             output = { ...inState, Data: { ...inState.Data, [inAction.payload[0]]: inAction.payload[1] } };
             break;
         case "MetaReplace" :
-            console.log("meta replace");
             output = {...inState, Meta:inAction.payload};
             break;
         case "MetaAdd" :
@@ -73,7 +72,6 @@ const Reducer =(inState:State, inAction:Actions)=>
                 return a.Time - b.Time;
             })
             output = { ...inState, Meta:inAction.payload.Meta};
-            console.log("meta add", output.MetaStack, output.Meta.Title);
             break;
         }
         case "MetaRemove" :
@@ -92,7 +90,6 @@ const Reducer =(inState:State, inAction:Actions)=>
             {
                 output.Meta = clone[clone.length-1].Meta;
             }
-            console.log("meta remove", output.MetaStack);
             break;
         }
     }
@@ -156,26 +153,22 @@ export function useMetas(arg?:KeyedMeta):KeyedMeta
 
     if(arg)
     {
-        console.log("useMetas called", arg.Title, id);
         const action:Actions = {type:"MetaAdd", payload: { ID:id, Meta:arg, Time:stamp }};
         if(!state.Client)
         {
-            console.log("server-sid dispatch");
-            //dispatch(action);
+            dispatch(action);
         }
         React.useEffect(()=>
         {
             if(state.Client)
             {
                 dispatch(action);
-                console.log("useMetas dispatching add!", arg.Title, id);
                 return ()=>
                 {
-                    console.log("useMetas dispatching remove!", arg.Title, id);
                     dispatch({type:"MetaRemove", payload:id});
                 };
             }
-        }, [id]);
+        }, []);
     }
 
     return state.Meta;
@@ -223,25 +216,6 @@ const Effects =()=>
     }, []);
     return null;
 };
-
-/*
-type MetaContextBinding = [get:KeyedMeta, set:React.Dispatch<React.SetStateAction<KeyedMeta>>];
-export const MetaContext = React.createContext([{Title:"default"}, (arg:KeyedMeta)=>{}] as MetaContextBinding);
-export const MetaContextLayer =({children}:{children:JSX.Element | JSX.Element[]})=>
-{
-    const [stateGet, stateSet] = React.useState({} as KeyedMeta);
-    return <MetaContext.Provider value={[stateGet, stateSet]}>{children}</MetaContext.Provider>;
-};
-export const Meta =({title}:{title:string})=>
-{
-    const [stateGet, stateSet] = React.useContext(MetaContext);
-    React.useEffect(()=>
-    {
-        stateSet({Title:title});
-    }, []);
-    return null;
-};
-*/
 
 const RouteTemplateTest =(inPath:Path, inDepth:number, inTemplate:string):false|SwitchStatus=>
 {
