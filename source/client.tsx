@@ -200,6 +200,28 @@ const Effects =()=>
     React.useEffect(()=>{ document.title = metasGet.Title??""; }, [metasGet.Title]);
     React.useEffect(()=>
     {
+        document.addEventListener("click", (e:Event)=>
+        {
+            let path = [e.target];
+            let pathStep = e.target;
+            while(pathStep.parentNode != document.body)
+            {
+                if(pathStep.href)
+                {
+                    e.preventDefault();
+                    history.pushState({}, '', pathStep.href);
+                    const u = new URL(pathStep.href);
+                    const p = PathParse(u);
+                    routeSet(p);
+                    break;
+                }
+              pathStep = pathStep.parentNode;
+              path.push(pathStep);
+            }
+        });
+
+        /*
+        someday...
         if(navigation)
         {
             const NavigationHandler = (e:NavigationEvent) =>
@@ -214,6 +236,8 @@ const Effects =()=>
             navigation.addEventListener("navigate", NavigationHandler);
             return ()=>navigation.removeEventListener("navigate", NavigationHandler);
         }
+        */
+
     }, []);
     return null;
 };
