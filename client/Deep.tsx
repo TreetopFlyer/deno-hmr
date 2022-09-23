@@ -25,7 +25,7 @@ const PartAbout =()=>
 const PartMe =()=>
 {
     useMetas({Title:"MEEE"});
-    return <p>me</p>;
+    return <p>me?</p>;
 }
 
 const Search = React.lazy(()=>import("./Search.tsx"));

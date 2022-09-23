@@ -70,8 +70,9 @@ const Reducer =(inState:State, inAction:Actions)=>
             inState.MetaStack.push(inAction.payload);
             inState.MetaStack.sort((a, b)=>{
                 return a.Time - b.Time;
-            })
-            output = { ...inState, Meta:inAction.payload.Meta};
+            });
+            const leading = inState.MetaStack[inState.MetaStack.length-1].Meta;
+            output = { ...inState, Meta:{...leading}};
             break;
         }
         case "MetaRemove" :
