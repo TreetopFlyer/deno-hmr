@@ -1,10 +1,9 @@
 import React from "react";
-import { useMetas, useRoute, useFetch, Switch, Case } from "amber";
+import { useMetas, useRoute, useFetch, useBase, Switch, Case, Metas } from "amber";
 
 const PartBlog =()=>
 {
     useMetas({Title:"Blog!"});
-
     return <div>
         <h3 className="text-xl font(black sans) p-4">Blog!</h3>
         <p>blog section</p>
@@ -13,19 +12,33 @@ const PartBlog =()=>
 
 const PartAbout =()=>
 {
+    const [routeGet] = useRoute();
     useMetas({Title:"About!"});
+    const base = useBase();
 
     return <div>
         <h3 className="text-xl font(black sans) p-4">About!</h3>
-        <p>about section</p>
+        <p>about section <span className="text-xl font-black">{base}</span></p>
+        <nav>
+            <a className="p-4 mr-2" href={base+"/me"}>me</a>
+            <a className="p-4 mr-2" href={base+"/us"}>us</a>
+        </nav>
     </div>;
 };
+
+const PartMe =()=>
+{
+    useMetas({Title:"MEEE"});
+    const base = useBase(0);
+
+    return <p>me?<span className="text-xl font-black">{base}</span></p>;
+}
 
 const Search = React.lazy(()=>import("./Search.tsx"));
 
 export default ()=>
 {
-    const [routeGet, routeSet, routeTest] = useRoute();
+    const [routeGet] = useRoute();
     const [stateGet, stateSet] = React.useState(4);
 
     const folder = routeGet.Parts.length ? routeGet.Parts[0] : "";
@@ -40,21 +53,20 @@ export default ()=>
         <a className={`text-white p-2 ${highlight("about")}`} href="/about">About</a>
         <a className={`text-white p-2 ${highlight("blog")}`} href="/blog">Blog</a>
         <a className={`text-white p-2 ${highlight("search")}`} href="/search">Search</a>
+        <a className={`text-white p-2 ${highlight("404")}`} href="/404">404</a>
     </nav> 
     <div className="p-4 border border-red-500">
         <>
             {status.Data}
         </>
     </div>
+
         <Switch value={routeGet.Parts[0]}>
             <Case value={""}>
                 <img src="static/Logo.svg" />
             </Case>
             <Case value={"blog"}>
                 <PartBlog />
-            </Case>
-            <Case value={"about"}>
-                <PartAbout />
             </Case>
             <Case value={"search"}>
                 <React.Suspense fallback={<div>Loading Search Component</div>}>
@@ -69,11 +81,13 @@ export default ()=>
         <Switch value={routeGet}>
             <Case value={`/about`}>
                 <p>about matched!!!!!</p>
+                <PartAbout/>
                 <Switch value={routeGet}>
                     <Case value={`/me`}>
-                        <p>its all about me</p>
+                        <PartMe/>
                     </Case>
                     <Case value={`/us`}>
+                        <Metas title="We the ppl"/>
                         <p>its a we thang</p>
                     </Case>
                 </Switch>

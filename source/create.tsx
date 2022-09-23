@@ -37,6 +37,9 @@ for(let i=0; i<Deno.args.length; i++)
         else if(key == "--server"){ options.Server = true; }
     }
 }
+
+const XPileOptions = options.Server ? {loader:"tsx", minify:true} : {loader:"tsx", sourcemap:"inline", minify:false};
+
 export type LoadedResources = {
     Import:{imports:{[key:string]:string}},
     Themed:{theme:Twind.ThemeConfiguration, plugins:Record<string, Twind.Plugin | undefined>},
@@ -53,6 +56,7 @@ export const Loaded:LoadedResources =
                 <head>
                     <title>{isoModel.Meta.Title??""}</title>
                     <link rel="canonical" href={isoModel.Path.Parts.join("/")}></link>
+                    <link rel="icon" type="image/x-icon" href="/static/favicon.ico"></link>
                     <meta name="viewport" content="width=device-width, initial-scale=1"/>
                     <meta name="description" content={isoModel.Meta.Description??""}/>
                     <style id="tw-main" dangerouslySetInnerHTML={{__html:styles}}/>
@@ -307,6 +311,7 @@ const FileRoutes = options.Server ?
 serve(async(inRequest)=>
 {
     const url = new URL(inRequest.url);
+    console.log(`--- ${url.pathname} ---`)
     const file:Response|false = FileRoutes(url, inRequest);
     if(file)
     {
@@ -327,6 +332,7 @@ serve(async(inRequest)=>
         const isoModel:State = { Meta:{}, MetaStack:[], Data:{}, Path:PathParse(url), Client:false, Queue:[] }
         /// Server Mode: Render react app
         let bake = options.Server ? ReactDOMServer.renderToString(<IsoProvider seed={isoModel}><Loaded.Launch.App/></IsoProvider>) : "dev mode loading";
+        isoModel.MetaStack = [];
         let count = 0;
         while(isoModel.Queue.length)
         {
@@ -335,6 +341,7 @@ serve(async(inRequest)=>
             await Promise.all(isoModel.Queue);
             isoModel.Queue = [];
             bake = ReactDOMServer.renderToString(<IsoProvider seed={isoModel}><Loaded.Launch.App/></IsoProvider>);
+            isoModel.MetaStack = [];
         }
         isoModel.Client = true;
         const stream = await ReactDOMServer.renderToReadableStream(
@@ -373,7 +380,7 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
             const code = await Deno.readTextFile(inFullProjectPath);
             if(isTranspiled)
             {
-                const parsed = await ESBuild.transform(code, {loader:"tsx", minify:true});
+                const parsed = await ESBuild.transform(code, XPileOptions);
                 const proxy = await LitCode.HMRModuleProxy(webPath);
                 localStorage.setItem(webPath, parsed.code);
                 localStorage.setItem(webPath+".pxy", proxy);
@@ -428,7 +435,7 @@ for await (const entry of walk(options.Active+"\\"+options.Client, {includeDirs:
 const path = import.meta.url.split("/").slice(0, -2).join("/")+RoutePaths.Amber;
 const amberClientFetch = await fetch(path);
 const amberClientText = await amberClientFetch.text();
-const amberClientParsed = await ESBuild.transform(amberClientText, {loader:"tsx", minify:true});
+const amberClientParsed = await ESBuild.transform(amberClientText, XPileOptions);
 localStorage.setItem(RoutePaths.Amber, amberClientParsed.code);
 
 if(!options.Server)

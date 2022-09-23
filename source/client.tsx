@@ -1,10 +1,11 @@
 import { string } from "https://esm.sh/v95/@types/prop-types@15.7.5/index.d.ts";
+import { useEffect } from "https://esm.sh/v95/@types/react@18.0.18/index.d.ts";
 import React from "react";
 
 export type CacheRecord = { Data:false|string, Error:boolean, Expiry:number|false, Pending:boolean };
 export type CacheQueue = Array<Promise<void>>;
 export type KeyedMeta = {Title?:string, Description?:string, Image?:string, Icon?:string};
-export type KeyedMetaID = {ID:string, Meta:KeyedMeta}
+export type KeyedMetaID = {ID:string, Meta:KeyedMeta, Time:number}
 export type KeyedData = {[key:string]:CacheRecord};
 export type Path = {
     Parts:Array<string>,
@@ -53,22 +54,25 @@ const Reducer =(inState:State, inAction:Actions)=>
                 }
             };
             break;
-        case "MetaReplace" :
-            output = {...inState, Meta:inAction.payload};
-            break;
         case "DataReplace" :
             output = { ...inState, Data: { ...inState.Data, [inAction.payload[0]]: inAction.payload[1] } };
             break;
+        case "MetaReplace" :
+            output = {...inState, Meta:inAction.payload};
+            break;
         case "MetaAdd" :
         {
-            const clone = [...inState.MetaStack];
-            if(clone.length > 0)
+            if(inState.MetaStack.length > 0)
             {
-                const leading = clone[clone.length-1];
+                const leading = inState.MetaStack[inState.MetaStack.length-1];
                 inAction.payload.Meta = {...leading.Meta, ...inAction.payload.Meta};
             }
-            clone.push(inAction.payload);
-            output = { ...inState, MetaStack:clone, Meta:inAction.payload.Meta};
+            inState.MetaStack.push(inAction.payload);
+            inState.MetaStack.sort((a, b)=>{
+                return a.Time - b.Time;
+            });
+            const leading = inState.MetaStack[inState.MetaStack.length-1].Meta;
+            output = { ...inState, Meta:{...leading}};
             break;
         }
         case "MetaRemove" :
@@ -141,30 +145,45 @@ export function useRoute():[get:Path, set:(path:Path)=>void]
     return [state.Path, (arg:Path)=>dispatch({type:"PathReplace", payload: arg })];
 }
 
-export function useMetas(arg:KeyedMeta):void;
-export function useMetas():KeyedMeta;
-export function useMetas(arg?:KeyedMeta):KeyedMeta|void
+let useMetaOrder = 0;
+export function useMetas(arg?:KeyedMeta):KeyedMeta
 {   
     const [state, dispatch] = React.useContext(IsoContext);
     const id = React.useId();
+    const stamp = ++useMetaOrder;
+
     if(arg)
     {
-        const action:Actions = {type:"MetaAdd", payload: {ID:id, Meta:arg }};
+        const action:Actions = {type:"MetaAdd", payload: { ID:id, Meta:arg, Time:stamp }};
         if(!state.Client)
         {
             dispatch(action);
         }
-        else
+        React.useEffect(()=>
         {
-            React.useEffect(()=>
+            if(state.Client)
             {
                 dispatch(action);
-                return ()=>{dispatch({type:"MetaRemove", payload:id});};
-            }, []);
-        }
+                return ()=>
+                {
+                    dispatch({type:"MetaRemove", payload:id});
+                };
+            }
+        }, []);
     }
+
     return state.Meta;
 }
+export const Metas =({title, descr, image}:{title?:string, descr?:string, image?:string})=>
+{
+    const metas:KeyedMeta = {};
+    if(title){metas.Title = title;}
+    if(descr){metas.Description = descr;}
+    if(image){metas.Image = image;}
+    useMetas(metas);
+    return null;
+}
+
 export const useFetch =(url:string):CacheRecord=>
 {
     const [state, dispatch] = React.useContext(IsoContext);
@@ -191,6 +210,28 @@ const Effects =()=>
     React.useEffect(()=>{ document.title = metasGet.Title??""; }, [metasGet.Title]);
     React.useEffect(()=>
     {
+        document.addEventListener("click", (e:Event)=>
+        {
+            let path = [e.target];
+            let pathStep = e.target;
+            while(pathStep.parentNode != document.body)
+            {
+                if(pathStep.href)
+                {
+                    e.preventDefault();
+                    history.pushState({}, '', pathStep.href);
+                    const u = new URL(pathStep.href);
+                    const p = PathParse(u);
+                    routeSet(p);
+                    break;
+                }
+              pathStep = pathStep.parentNode;
+              path.push(pathStep);
+            }
+        });
+
+        /*
+        someday...
         if(navigation)
         {
             const NavigationHandler = (e:NavigationEvent) =>
@@ -205,6 +246,8 @@ const Effects =()=>
             navigation.addEventListener("navigate", NavigationHandler);
             return ()=>navigation.removeEventListener("navigate", NavigationHandler);
         }
+        */
+
     }, []);
     return null;
 };
@@ -214,8 +257,6 @@ const RouteTemplateTest =(inPath:Path, inDepth:number, inTemplate:string):false|
     const url = new URL("http://h"+inTemplate);
     const path = inPath.Parts.slice(inDepth);
     const test = url.pathname.substring(1).split("/");
-
-    console.log("cheking", path, test);
 
     const vars:Record<string, string> = {};
     if(test.length > path.length)
@@ -237,6 +278,14 @@ const RouteTemplateTest =(inPath:Path, inDepth:number, inTemplate:string):false|
     }
     return {Depth:test.length+inDepth, Params:vars};
 }
+
+export const useBase =(inDelta=0):string=>
+{
+    const [path] = useRoute();
+    const ctx = React.useContext(SwitchContext);
+    const segment = "/"+path.Parts.slice(0, ctx.Depth + inDelta).join("/");
+    return segment;
+};
 
 export type SwitchStatus = {Depth:number, Params:Record<string, string>}
 export const SwitchContext:React.Context<SwitchStatus> = React.createContext({Depth:0, Params:{}});
@@ -274,14 +323,15 @@ export const Switch =({ children, value }: { children: JSX.Element | JSX.Element
                 child = children[i];
                 if (child.props?.value == value)
                 {
-                    break;
+                    return child.props.children;
                 }
             }
         }
         // only return the last case as a default if it has no value prop
-        return child.props?.value ? null : child.props.children;
+        if(!child.props?.value)
+        {
+            return child.props.children;
+        }
     }, [value]);
 };
-export const Case = (
-	{ value, children }: { value?: SwitchValue; children: React.ReactNode },
-) => null;
+export const Case = ({ value, children }: { value?: SwitchValue; children: React.ReactNode }) => null;
