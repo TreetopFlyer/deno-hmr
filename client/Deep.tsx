@@ -1,10 +1,9 @@
 import React from "react";
-import { useMetas, useRoute, useFetch, Switch, Case } from "amber";
+import { useMetas, useRoute, useFetch, useBase, Switch, Case, Metas } from "amber";
 
 const PartBlog =()=>
 {
     useMetas({Title:"Blog!"});
-
     return <div>
         <h3 className="text-xl font(black sans) p-4">Blog!</h3>
         <p>blog section</p>
@@ -15,17 +14,24 @@ const PartAbout =()=>
 {
     const [routeGet] = useRoute();
     useMetas({Title:"About!"});
+    const base = useBase();
 
     return <div>
         <h3 className="text-xl font(black sans) p-4">About!</h3>
-        <p>about section</p>
+        <p>about section <span className="text-xl font-black">{base}</span></p>
+        <nav>
+            <a className="p-4 mr-2" href={base+"/me"}>me</a>
+            <a className="p-4 mr-2" href={base+"/us"}>us</a>
+        </nav>
     </div>;
 };
 
 const PartMe =()=>
 {
     useMetas({Title:"MEEE"});
-    return <p>me?</p>;
+    const base = useBase(0);
+
+    return <p>me?<span className="text-xl font-black">{base}</span></p>;
 }
 
 const Search = React.lazy(()=>import("./Search.tsx"));
@@ -76,15 +82,12 @@ export default ()=>
             <Case value={`/about`}>
                 <p>about matched!!!!!</p>
                 <PartAbout/>
-                <nav>
-                    <a className="p-4 mr-2" href="/about/me">me</a>
-                    <a className="p-4 mr-2" href="/about/us">us</a>
-                </nav>
                 <Switch value={routeGet}>
                     <Case value={`/me`}>
                         <PartMe/>
                     </Case>
                     <Case value={`/us`}>
+                        <Metas title="We the ppl"/>
                         <p>its a we thang</p>
                     </Case>
                 </Switch>

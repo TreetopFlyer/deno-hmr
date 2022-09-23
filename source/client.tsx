@@ -174,6 +174,16 @@ export function useMetas(arg?:KeyedMeta):KeyedMeta
 
     return state.Meta;
 }
+export const Metas =({title, descr, image}:{title?:string, descr?:string, image?:string})=>
+{
+    const metas:KeyedMeta = {};
+    if(title){metas.Title = title;}
+    if(descr){metas.Description = descr;}
+    if(image){metas.Image = image;}
+    useMetas(metas);
+    return null;
+}
+
 export const useFetch =(url:string):CacheRecord=>
 {
     const [state, dispatch] = React.useContext(IsoContext);
@@ -269,6 +279,14 @@ const RouteTemplateTest =(inPath:Path, inDepth:number, inTemplate:string):false|
     return {Depth:test.length+inDepth, Params:vars};
 }
 
+export const useBase =(inDelta=0):string=>
+{
+    const [path] = useRoute();
+    const ctx = React.useContext(SwitchContext);
+    const segment = "/"+path.Parts.slice(0, ctx.Depth + inDelta).join("/");
+    return segment;
+};
+
 export type SwitchStatus = {Depth:number, Params:Record<string, string>}
 export const SwitchContext:React.Context<SwitchStatus> = React.createContext({Depth:0, Params:{}});
 export type SwitchValue = string|number|boolean
@@ -316,6 +334,4 @@ export const Switch =({ children, value }: { children: JSX.Element | JSX.Element
         }
     }, [value]);
 };
-export const Case = (
-	{ value, children }: { value?: SwitchValue; children: React.ReactNode },
-) => null;
+export const Case = ({ value, children }: { value?: SwitchValue; children: React.ReactNode }) => null;
