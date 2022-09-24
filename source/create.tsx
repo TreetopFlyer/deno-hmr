@@ -426,7 +426,7 @@ const ProcessFiles =debounce(async()=>
     }
     filesChanged.clear();
 }, 500);
-for await (const entry of walk(options.Active+"\\"+options.Client, {includeDirs:false}))
+for await (const entry of walk(options.Active+"/"+options.Client, {includeDirs:false}))
 {
     await XPile(entry.path, true);
 }
