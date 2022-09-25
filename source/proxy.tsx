@@ -78,30 +78,27 @@ const ProxyCreate =(...args)=>
 const ProxyState =(arg)=>
 {
     const id = ReactParts.useId();
+    const trueArg = arg;
 
     // does statesOld have an entry for this state? use that instead of the passed arg
     const check =  MapAt(HMR.statesOld, HMR.states.size);
     if(check)
     {
         arg = check[1].state;
+        console.info(`BOOTING with ${arg}`);
     }
 
     const lastKnowReloads = HMR.reloads;
     const [stateGet, stateSet] = ReactParts.useState(arg);
     ReactParts.useEffect(()=>{
-        console.warn(`ADDITION id:${id} reloads:${HMR.reloads}`);
         return ()=>{
-
-            if(HMR.reloads != lastKnowReloads)
+            if(HMR.reloads == lastKnowReloads)
             {
-                console.info("-- removal due to HMR --");
-            }
-            else
-            {
-                console.info("-- removal due to Switch --");
+                // this is a switch/ui change, not a HMR reload change
+                const oldState = MapAt(HMR.statesOld, HMR.states.size-1);
+                HMR.statesOld.set(oldState[0], {...oldState[1], state:trueArg});
             }
             HMR.states.delete(id);
-            console.warn(`REMOVAL id:${id} reloads:${HMR.reloads} known:${lastKnowReloads}`);
         }
     }, []);
 
