@@ -32,7 +32,7 @@ export default ()=>
 
     return <div>
 
-        <button className="p-2 bg-black text-white" onClick={e=>countSet(countGet+1)}>app count {countGet}</button>
+        <button className="p-2 bg-black text-white" onClick={e=>countSet(countGet+1)}>app count is: {countGet}</button>
         <Search/>
 
     </div>;

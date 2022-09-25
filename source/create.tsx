@@ -72,9 +72,10 @@ export const Loaded:LoadedResources =
     Themed:{theme:{}, plugins:{}}
 };
 export const FullPaths = {
-    Import:`file://${options.Active}/${options.Import}`,
-    Themed:`file://${options.Active}/${options.Themed}`,
-    Launch:`file://${options.Active}/${options.Client}/${options.Launch}`
+    Import: `file://${options.Active}/${options.Import}`,
+    Themed: `file://${options.Active}/${options.Themed}`,
+    Launch: `file://${options.Active}/${options.Client}/${options.Launch}`,
+    Module: import.meta.url.split("/").slice(0, -2).join("/") // two folders up from this file
 };
 export const RoutePaths = {
     Amber: `/${options.Source}/client.tsx`,
@@ -150,46 +151,13 @@ HMRModuleProxy:async(inModule:string):Promise<string>=>
     Reloader("${inModule}", reloadHandler);`;
 },
 
-HMRReactProxy:`
-import * as ReactParts from "react-alias";
+HMRReactProxy:``};
+let proxyPath = `${FullPaths.Module}/${options.Source}/proxy.tsx`;
+console.log(proxyPath);
+let proxyFile = await fetch(proxyPath);
+let proxyText = await proxyFile.text();
+LitCode.HMRReactProxy = proxyText;
 
-window.HMR = { registered:new Map() };
-window.HMR.onChange =(key, value)=>
-{
-    console.log("handler registered");
-    window.HMR.registered.set(key, value);
-};
-window.HMR.update =()=>
-{
-    const keys = [];
-    for(const [key, value] of window.HMR.registered){ keys.push(key); }
-    window.HMR.registered.clear();
-    keys.forEach(k=>k());
-};
-
-const ProxyElement =(props)=>
-{
-    const [stateGet, stateSet] = ReactParts.useState(0);
-    ReactParts.useEffect(()=>window.HMR.onChange( ()=>stateSet(stateGet+1), "yep" ));
-
-    console.log("rerendering", props.args[0]);
-
-    return ReactParts.createElement("div", {style:{padding:"10px", border:"2px solid red"}},
-        ReactParts.createElement("p", null, stateGet),
-        ReactParts.createElement(...props.args)
-    );
-};
-
-const ProxyCreate =(...args)=>
-{
-    return typeof args[0] != "string" ? ReactParts.createElement(ProxyElement, {args}) : ReactParts.createElement(...args);
-};
-
-export * from "react-alias";
-export { ProxyCreate as createElement };
-export default {...ReactParts.default, createElement:ProxyCreate};
-`
-};
 export const Util ={
     Extension: (inPath:string):string => inPath.substring(inPath.lastIndexOf(".")),
     JavaScript: (inExtension:string):boolean => inExtension == ".tsx" || inExtension == ".ts" || inExtension == ".jsx" || inExtension == ".js"
