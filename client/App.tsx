@@ -25,23 +25,15 @@ const ShowStack =()=>
 export default ()=>
 {   
     const metas = useMetas({Title:"Amber App"});
-    const [countGet, countSet] = React.useState(2);
+    const [countGet, countSet] = React.useState(-10);
     const [route] = useRoute();
 
+    console.log("app rendered!");
+
     return <div>
-        <a href="/">home</a>
-        <a href="/anyhting" className="inline-block mt-2">anything</a>
-        <Switch value={route}>
-            <Case value="/">
-                <div>
-                <Thing/>
-                </div>
-                
-            </Case>
-            <Case>
-                <Search/>
-            </Case>
-        </Switch>
-        
+
+        <button className="p-2 bg-black text-white" onClick={e=>countSet(countGet+1)}>app count {countGet}</button>
+        <Search/>
+
     </div>;
 };

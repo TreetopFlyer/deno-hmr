@@ -105,7 +105,8 @@ ${  options.Server ?
     Reloader("reload-complete", window.HMR.update);
     import { setup } from "https://esm.sh/twind@0.16.17/shim";
     setup(${JSON.stringify(Loaded.Themed)});
-    createRoot(dom).render(h(Search));`
+
+    createRoot(dom).render(h(app));`
 }`,
 
 HMRSource: `
@@ -150,13 +151,12 @@ HMRModuleProxy:async(inModule:string):Promise<string>=>
 },
 
 HMRReactProxy:`
-import * as React from "react-alias";
-
-const h = React.createElement;
+import * as ReactParts from "react-alias";
 
 window.HMR = { registered:new Map() };
 window.HMR.onChange =(key, value)=>
 {
+    console.log("handler registered");
     window.HMR.registered.set(key, value);
 };
 window.HMR.update =()=>
@@ -166,29 +166,28 @@ window.HMR.update =()=>
     window.HMR.registered.clear();
     keys.forEach(k=>k());
 };
+
 const ProxyElement =(props)=>
 {
-    const [stateGet, stateSet] = React.useState(0);
-    React.useEffect(()=>window.HMR.onChange( ()=>stateSet(stateGet+1), "yep" ));
-    console.log("proxy re-rendering", props.args);
-    return h("div", {className:"p-2 border(2 red-500)"},
-        h(props.args[0], {...props.args[1], _proxy:Math.random()},
-            ...props.args[1].children??[]
-        )
+    const [stateGet, stateSet] = ReactParts.useState(0);
+    ReactParts.useEffect(()=>window.HMR.onChange( ()=>stateSet(stateGet+1), "yep" ));
+
+    console.log("rerendering", props.args[0]);
+
+    return ReactParts.createElement("div", {style:{padding:"10px", border:"2px solid red"}},
+        ReactParts.createElement("p", null, stateGet),
+        ReactParts.createElement(...props.args)
     );
 };
-const ProxyCreate =(type, props, children)=>
-{
-    console.log("ProxyCreate called", type, props, children);
-    return h(type, props, children);
-};
 
-const defaultClone = {...React.default};
-defaultClone.createElement = ProxyCreate;
+const ProxyCreate =(...args)=>
+{
+    return typeof args[0] != "string" ? ReactParts.createElement(ProxyElement, {args}) : ReactParts.createElement(...args);
+};
 
 export * from "react-alias";
 export { ProxyCreate as createElement };
-export default defaultClone;
+export default {...ReactParts.default, createElement:ProxyCreate};
 `
 };
 export const Util ={
