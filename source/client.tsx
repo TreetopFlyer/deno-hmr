@@ -214,7 +214,7 @@ const Effects =()=>
         {
             let path = [e.target];
             let pathStep = e.target;
-            while(pathStep.parentNode != document.body)
+            while(pathStep.parentElement != document.body)
             {
                 if(pathStep.href)
                 {
@@ -225,7 +225,7 @@ const Effects =()=>
                     routeSet(p);
                     break;
                 }
-              pathStep = pathStep.parentNode;
+              pathStep = pathStep.parentElement;
               path.push(pathStep);
             }
         });

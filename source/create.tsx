@@ -101,10 +101,11 @@ ${  options.Server ?
     :
     /* /// Create Mode: client-side rendering and setup of twind */
     `import Reloader from "${RoutePaths.HMRSource}";
+    import Search from "/client/Search.tsx"
     Reloader("reload-complete", window.HMR.update);
     import { setup } from "https://esm.sh/twind@0.16.17/shim";
     setup(${JSON.stringify(Loaded.Themed)});
-    createRoot(dom).render(h(app));`
+    createRoot(dom).render(h(Search));`
 }`,
 
 HMRSource: `
@@ -149,7 +150,10 @@ HMRModuleProxy:async(inModule:string):Promise<string>=>
 },
 
 HMRReactProxy:`
-import * as ReactParts from "react-alias";
+import * as React from "react-alias";
+
+const h = React.createElement;
+
 window.HMR = { registered:new Map() };
 window.HMR.onChange =(key, value)=>
 {
@@ -164,19 +168,28 @@ window.HMR.update =()=>
 };
 const ProxyElement =(props)=>
 {
-    const [stateGet, stateSet] = ReactParts.useState(0);
-    ReactParts.useEffect(()=>window.HMR.onChange( ()=>stateSet(stateGet+1), "yep" ));
-    console.log("proxy re-rendering");
-    return ReactParts.createElement(props.children.type, {...props.children.props, _proxy:Math.random()})
+    const [stateGet, stateSet] = React.useState(0);
+    React.useEffect(()=>window.HMR.onChange( ()=>stateSet(stateGet+1), "yep" ));
+    console.log("proxy re-rendering", props.args);
+    return h("div", {className:"p-2 border(2 red-500)"},
+        h(props.args[0], {...props.args[1], _proxy:Math.random()},
+            ...props.args[1].children??[]
+        )
+    );
 };
-const ProxyCreate =(...args)=>
+const ProxyCreate =(type, props, children)=>
 {
-    const el = ReactParts.createElement(...args)
-    return typeof args[0] != "string" ? ReactParts.createElement(ProxyElement, null, el) : el;
+    console.log("ProxyCreate called", type, props, children);
+    return h(type, props, children);
 };
+
+const defaultClone = {...React.default};
+defaultClone.createElement = ProxyCreate;
+
 export * from "react-alias";
-export default ReactParts.default;
-export { ProxyCreate as createElement };`
+export { ProxyCreate as createElement };
+export default defaultClone;
+`
 };
 export const Util ={
     Extension: (inPath:string):string => inPath.substring(inPath.lastIndexOf(".")),

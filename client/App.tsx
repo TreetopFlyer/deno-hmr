@@ -1,6 +1,8 @@
 import React from "react";
 import Deep from "./Deep.tsx"; 
+import Search from "./Search.tsx";
 import { useMetas, useRoute, IsoContext, Switch, Case } from "amber";
+import Thing from "./Thing.tsx";
 
 const ShowStack =()=>
 {
@@ -27,11 +29,19 @@ export default ()=>
     const [route] = useRoute();
 
     return <div>
-        <ShowStack/>
-        <h1 className="p-4 text-xl">{metas.Title}</h1>
-        <div className="border-4 no-t">
-            <button onClick={()=>countSet(countGet+1)}>count is: {countGet}</button>
-        </div>
-        <Deep/>
+        <a href="/">home</a>
+        <a href="/anyhting" className="inline-block mt-2">anything</a>
+        <Switch value={route}>
+            <Case value="/">
+                <div>
+                <Thing/>
+                </div>
+                
+            </Case>
+            <Case>
+                <Search/>
+            </Case>
+        </Switch>
+        
     </div>;
 };
