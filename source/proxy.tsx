@@ -2,34 +2,42 @@ import * as ReactParts from "react-alias";
 
 const H = ReactParts.createElement;
 
-window.HMR = {
+const HMR = {
     registered: new Map(),
-    states: new Map()
+    states: new Map(),
+    statesOld: new Map()
 };
-window.HMR.onChange =(key, value)=>
+HMR.onChange =(key, value)=>
 {
     console.log("handler registered");
-    window.HMR.registered.set(key, value);
+    HMR.registered.set(key, value);
 };
-window.HMR.update =()=>
+HMR.update =()=>
 {
     const keys = [];
-    for(const [key, value] of window.HMR.registered){ keys.push(key); }
-    window.HMR.registered.clear();
-    window.HMR.echoState();
+    for(const [key, value] of HMR.registered){ keys.push(key); }
+    HMR.registered.clear();
+    HMR.statesOld = HMR.states;
+    HMR.states = new Map();
     keys.forEach(k=>k());
-    window.HMR.echoState();
+    HMR.echoState();
 };
-window.HMR.echoState =()=>
+HMR.echoState =()=>
 {
-    const output = [];
+    let output = [];
+    for(const[key, val] of HMR.statesOld)
+    {
+        output[key] = val.state;
+    }
+    console.log(output);
+    output = [];
     for(const[key, val] of HMR.states)
     {
         output[key] = val.state;
     }
     console.log(output);
 };
-window.HMR.recallState =()=>
+HMR.recallState =()=>
 {
     for(const[key, val] of HMR.states)
     {
@@ -37,7 +45,22 @@ window.HMR.recallState =()=>
         set(state);
         console.log(key, "has been set with", state);
     }
-}
+};
+HMR.indexOnOld =(inIndex)=>
+{
+    let index = 0;
+    for(const kvp of HMR.statesOld)
+    {
+        if(index == inIndex)
+        {
+            return kvp;
+        }
+        index++;
+    }
+    return false;
+};
+
+window.HMR = HMR;
 
 function StateSpy (...ReactCreateArgs)
 {
@@ -47,7 +70,7 @@ function StateSpy (...ReactCreateArgs)
 const ProxyElement =(props)=>
 {
     const [stateGet, stateSet] = ReactParts.useState(0);
-    ReactParts.useEffect(()=>window.HMR.onChange( ()=>stateSet(stateGet+1), "yep" ));
+    ReactParts.useEffect(()=>HMR.onChange( ()=>stateSet(stateGet+1), "yep" ));
 
     return H("div", {style:{padding:"10px", border:"2px solid red"}},
         H("p", null, stateGet),
@@ -63,19 +86,27 @@ const ProxyCreate =(...args)=>
 
 const ProxyState =(arg)=>
 {
+    const check = HMR.indexOnOld(HMR.states.size);
+    console.log("checking old value", check);
+    if(check)
+    {
+        arg = check[1].state;
+    }
+
     const id = ReactParts.useId();
     const [stateGet, stateSet] = ReactParts.useState(arg);
 
-    console.log("state spy created", id, arg);
-    if(!window.HMR.states.has(id))
+    if(!HMR.states.has(id))
     {
-        window.HMR.states.set(id, {state:arg, set:stateSet});
+        console.log("state spy created", id, arg, "at index", HMR.states.size);
+        
+        HMR.states.set(id, {state:arg, set:stateSet});
     }
     
     function proxySetter (arg)
     {
         console.log("state spy update", id, arg);
-        window.HMR.states.set(id, {state:arg, set:stateSet});
+        HMR.states.set(id, {state:arg, set:stateSet});
         return stateSet(arg);
     }
     return [stateGet, proxySetter];
