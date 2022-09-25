@@ -94,7 +94,11 @@ import { IsoProvider } from "amber";
 const iso = ${JSON.stringify(isoModel)};      
 const dom = document.querySelector("#app");
 const url = new URL(location.href);
-const app =()=> h(IsoProvider, {seed:iso}, h(App));
+const app =()=>
+{
+    console.log("UBER ROOT RENDER");
+    return h(IsoProvider, {seed:iso}, h(App));
+}
 
 ${  options.Server ?
     /* /// Server Mode: hydrate server html */

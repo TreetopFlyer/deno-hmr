@@ -25,18 +25,17 @@ const ShowStack =()=>
 export default ()=>
 {   
     const metas = useMetas({Title:"Amber App"});
-    const [countGet, countSet] = React.useState(-10);
+    //const [countGet, countSet] = React.useState(-10);
+    //<button className="p-2 bg-black text-white" onClick={e=>countSet(countGet+1)}>app count is: {countGet}</button>
+        
     const [route] = useRoute();
-
-    console.log("app rendered!");
 
     return <div>
         <nav className="flex gap-10">
             <a href="/home">home!</a>
             <a href="/page1">page1</a>
         </nav>
-        <button className="p-2 bg-black text-white" onClick={e=>countSet(countGet+1)}>app count is: {countGet}</button>
-        
+
         <Switch value={route.Parts[0]}>
             <Case value="home">
                 <p>home page!!!</p>

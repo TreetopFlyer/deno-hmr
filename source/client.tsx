@@ -296,52 +296,47 @@ export const Switch =({ children, value }: { children: JSX.Element | JSX.Element
 {
     const ctx = React.useContext(SwitchContext);
 
-        console.log("SWITCH updating")
-		let child = <></>;
-		if (!Array.isArray(children))
+    let child = <></>;
+    if (!Array.isArray(children))
+    {
+        children = [children];
+    }
+    if(typeof value == "object")
+    {
+        for (let i = 0; i < children.length; i++)
         {
-			children = [children];
-		}
-        if(typeof value == "object")
-        {
-            for (let i = 0; i < children.length; i++)
+            child = children[i];
+            if (child.props?.value)
             {
-                child = children[i];
-                if (child.props?.value)
+                const test = RouteTemplateTest(value, ctx.Depth??0, child.props.value);
+                if(test)
                 {
-                    const test = RouteTemplateTest(value, ctx.Depth??0, child.props.value);
-                    if(test)
-                    {
-                        test.Params = {...ctx.Params, ...test.Params};
-                        return <SwitchContext.Provider value={test}>{child.props.children}</SwitchContext.Provider>
-                    }
+                    test.Params = {...ctx.Params, ...test.Params};
+                    return <SwitchContext.Provider value={test}>{child.props.children}</SwitchContext.Provider>
                 }
             }
         }
-        else
+    }
+    else
+    {
+        for (let i = 0; i < children.length; i++)
         {
-            for (let i = 0; i < children.length; i++)
+            child = children[i];
+            if (child.props?.value == value)
             {
-                child = children[i];
-                if (child.props?.value == value)
+                /// hol up. has case been proxied??
+                if(child.props?.__args)
                 {
-                    /// hol up. has case been proxied??
-                    if(child.props?.__args)
-                    {
-                        console.log("case has been proxied", child.props.__args);
-                        console.log("returning case as", child.props.__args[2]);
-
-                        return child.props.__args[2];
-                    }
-                    console.log("rendering", child.props.children);
-                    return child.props.children;
+                    return child.props.__args[2];
                 }
+                return child.props.children;
             }
         }
-        // only return the last case as a default if it has no value prop
-        if(!child.props?.value)
-        {
-            return child.props.children;
-        }
+    }
+    // only return the last case as a default if it has no value prop
+    if(!child.props?.value)
+    {
+        return child.props.children;
+    }
 };
 export const Case = ({ value, children }: { value?: SwitchValue; children: React.ReactNode }) => null;
