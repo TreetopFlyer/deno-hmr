@@ -62,11 +62,6 @@ HMR.indexOnOld =(inIndex)=>
 
 window.HMR = HMR;
 
-function StateSpy (...ReactCreateArgs)
-{
-    return H(...ReactCreateArgs);
-}
-
 const ProxyElement =(props)=>
 {
     const [stateGet, stateSet] = ReactParts.useState(0);
@@ -75,7 +70,7 @@ const ProxyElement =(props)=>
     return H("div", {style:{padding:"10px", border:"2px solid red"}},
         H("p", null, stateGet),
         //props.children
-        StateSpy(...props.args)
+        H(...props.args)
     );
 };
 
@@ -95,6 +90,13 @@ const ProxyState =(arg)=>
 
     const id = ReactParts.useId();
     const [stateGet, stateSet] = ReactParts.useState(arg);
+    ReactParts.useEffect(()=>{
+        console.warn("ADDITION", id);
+        return ()=>{
+            console.warn("REMOVAL", id);
+            HMR.states.delete(id);
+        }
+    }, []);
 
     if(!HMR.states.has(id))
     {
