@@ -43,7 +43,7 @@ HMR.recallState =()=>
     {
         const {state, set} = val;
         set(state);
-        console.log(key, "has been set with", state);
+        //console.log(key, "has been set with", state);
     }
 };
 HMR.indexOnOld =(inIndex)=>
@@ -70,19 +70,19 @@ const ProxyElement =(props)=>
     return H("div", {style:{padding:"10px", border:"2px solid red"}},
         H("p", null, stateGet),
         //props.children
-        H(...props.args)
+        H(...props.__args)
     );
 };
 
 const ProxyCreate =(...args)=>
 {
-    return typeof args[0] != "string" ? H(ProxyElement, {args}) : H(...args);
+    return typeof args[0] != "string" ? H(ProxyElement, {__args:args, ...args[1]}) : H(...args);
 };
 
 const ProxyState =(arg)=>
 {
     const check = HMR.indexOnOld(HMR.states.size);
-    console.log("checking old value", check);
+    //console.log("checking old value", check);
     if(check)
     {
         arg = check[1].state;
@@ -91,23 +91,23 @@ const ProxyState =(arg)=>
     const id = ReactParts.useId();
     const [stateGet, stateSet] = ReactParts.useState(arg);
     ReactParts.useEffect(()=>{
-        console.warn("ADDITION", id);
+        //console.warn("ADDITION", id);
         return ()=>{
-            console.warn("REMOVAL", id);
+            //console.warn("REMOVAL", id);
             HMR.states.delete(id);
         }
     }, []);
 
     if(!HMR.states.has(id))
     {
-        console.log("state spy created", id, arg, "at index", HMR.states.size);
+        //console.log("state spy created", id, arg, "at index", HMR.states.size);
         
         HMR.states.set(id, {state:arg, set:stateSet});
     }
     
     function proxySetter (arg)
     {
-        console.log("state spy update", id, arg);
+        //console.log("state spy update", id, arg);
         HMR.states.set(id, {state:arg, set:stateSet});
         return stateSet(arg);
     }

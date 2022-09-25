@@ -32,13 +32,20 @@ export default ()=>
 
     return <div>
         <nav className="flex gap-10">
-            <a href="/home">home</a>
+            <a href="/home">home!</a>
             <a href="/page1">page1</a>
         </nav>
         <button className="p-2 bg-black text-white" onClick={e=>countSet(countGet+1)}>app count is: {countGet}</button>
         
-        {route.Parts[0] == "home" && <p>home page!</p>}
-        {route.Parts[0] == "page1" && <Search/>}
+        <Switch value={route.Parts[0]}>
+            <Case value="home">
+                <p>home page!!!</p>
+            </Case>
+            <Case value="page1">
+                <Search/>
+            </Case>
+            <Case><p className="text-lg text-red-55">404!</p></Case>
+        </Switch>
 
     </div>;
 };

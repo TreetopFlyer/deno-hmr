@@ -287,14 +287,16 @@ export const useBase =(inDelta=0):string=>
     return segment;
 };
 
+const Empty =(props)=> props.children;
+
 export type SwitchStatus = {Depth:number, Params:Record<string, string>}
 export const SwitchContext:React.Context<SwitchStatus> = React.createContext({Depth:0, Params:{}});
 export type SwitchValue = string|number|boolean
 export const Switch =({ children, value }: { children: JSX.Element | JSX.Element[]; value:SwitchValue|Path  })=>
 {
     const ctx = React.useContext(SwitchContext);
-	return React.useMemo(() =>
-    {
+
+        console.log("SWITCH updating")
 		let child = <></>;
 		if (!Array.isArray(children))
         {
@@ -323,6 +325,15 @@ export const Switch =({ children, value }: { children: JSX.Element | JSX.Element
                 child = children[i];
                 if (child.props?.value == value)
                 {
+                    /// hol up. has case been proxied??
+                    if(child.props?.__args)
+                    {
+                        console.log("case has been proxied", child.props.__args);
+                        console.log("returning case as", child.props.__args[2]);
+
+                        return child.props.__args[2];
+                    }
+                    console.log("rendering", child.props.children);
                     return child.props.children;
                 }
             }
@@ -332,6 +343,5 @@ export const Switch =({ children, value }: { children: JSX.Element | JSX.Element
         {
             return child.props.children;
         }
-    }, [value]);
 };
 export const Case = ({ value, children }: { value?: SwitchValue; children: React.ReactNode }) => null;
