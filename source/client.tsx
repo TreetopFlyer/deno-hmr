@@ -163,6 +163,7 @@ export function useMetas(arg?:KeyedMeta):KeyedMeta
         {
             if(state.Client)
             {
+                console.log("USeMeta", action.payload.Meta.Title);
                 dispatch(action);
                 return ()=>
                 {
@@ -181,7 +182,8 @@ export const Metas =({title, descr, image}:{title?:string, descr?:string, image?
     if(descr){metas.Description = descr;}
     if(image){metas.Image = image;}
     useMetas(metas);
-    return null;
+    console.log(`rendering <meta/> ${title}`)
+    return <em>you set {title}</em>;
 }
 
 export const useFetch =(url:string):CacheRecord=>
@@ -255,8 +257,8 @@ const Effects =()=>
 const RouteTemplateTest =(inPath:Path, inDepth:number, inTemplate:string):false|SwitchStatus=>
 {
     const url = new URL("http://h"+inTemplate);
-    const path = inPath.Parts.slice(inDepth);
     const test = url.pathname.substring(1).split("/");
+    const path = inPath.Parts.slice(inDepth);
 
     const vars:Record<string, string> = {};
     if(test.length > path.length)
@@ -276,24 +278,27 @@ const RouteTemplateTest =(inPath:Path, inDepth:number, inTemplate:string):false|
             return false;
         }
     }
-    return {Depth:test.length+inDepth, Params:vars};
+    return {Depth:inDepth+test.length, Params:vars, Base:"/"+inPath.Parts.slice(0, inDepth+test.length).join("/")};
 }
-
-export const useBase =(inDelta=0):string=>
+export const usePath =():SwitchStatus=>
 {
-    const [path] = useRoute();
-    const ctx = React.useContext(SwitchContext);
-    const segment = "/"+path.Parts.slice(0, ctx.Depth + inDelta).join("/");
-    return segment;
+    return React.useContext(SwitchContext);
+};
+export const Path =({param}:{param:string}):JSX.Element|null=>
+{
+    return <>{React.useContext(SwitchContext).Params[param]}</>??null;
 };
 
-export type SwitchStatus = {Depth:number, Params:Record<string, string>}
-export const SwitchContext:React.Context<SwitchStatus> = React.createContext({Depth:0, Params:{}});
+export type SwitchStatus = {Depth:number, Params:Record<string, string>, Base:string};
+export const SwitchContext:React.Context<SwitchStatus> = React.createContext({Depth:0, Params:{}, Base:"/"});
 export type SwitchValue = string|number|boolean
 export const Switch =({ children, value }: { children: JSX.Element | JSX.Element[]; value:SwitchValue|Path  })=>
 {
     const ctx = React.useContext(SwitchContext);
-    const getChildren =(inChild:JSX.Element):JSX.Element=> inChild.props.__args ? inChild.props.__args[2]??null : inChild.props.children??null;
+    const getChildren =(inChild:JSX.Element):JSX.Element=>
+    {
+        return inChild.props.__args ? inChild.props.__args.slice(2)??null : inChild.props.children??null;
+    }
 
     let child = <></>;
     if (!Array.isArray(children))
