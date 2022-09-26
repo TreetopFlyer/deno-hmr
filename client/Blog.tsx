@@ -5,6 +5,7 @@ export default ()=>
 {
     const {Base} = usePath();
     return <div>
+        <Metas title="Blog!" />
         <h1 className="border-b p-4 ">Blog</h1>
         <nav>
             <a href={Base}>Blog home</a>
