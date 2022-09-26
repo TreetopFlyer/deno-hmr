@@ -292,7 +292,7 @@ export const Path =({param}:{param:string}):JSX.Element|null=>
 export type SwitchStatus = {Depth:number, Params:Record<string, string>, Base:string};
 export const SwitchContext:React.Context<SwitchStatus> = React.createContext({Depth:0, Params:{}, Base:"/"});
 export type SwitchValue = string|number|boolean
-export const Switch =({ children, value }: { children: JSX.Element | JSX.Element[]; value:SwitchValue|Path  })=>
+export const Switch =({ children, value }: { children: JSX.Element | JSX.Element[]; value?:SwitchValue  })=>
 {
     const ctx = React.useContext(SwitchContext);
     const getChildren =(inChild:JSX.Element):JSX.Element=>
@@ -305,14 +305,15 @@ export const Switch =({ children, value }: { children: JSX.Element | JSX.Element
     {
         children = [children];
     }
-    if(typeof value == "object")
+    if(!value)
     {
+        const [route] = useRoute();
         for (let i = 0; i < children.length; i++)
         {
             child = children[i];
             if (child.props?.value)
             {
-                const test = RouteTemplateTest(value, ctx.Depth??0, child.props.value);
+                const test = RouteTemplateTest(route, ctx.Depth??0, child.props.value);
                 if(test)
                 {
                     test.Params = {...ctx.Params, ...test.Params};

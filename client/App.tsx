@@ -17,7 +17,7 @@ export default ()=>
 
         <Metas title="A Website"/>
 
-        <Switch value={route}>
+        <Switch>
             <Case value="/">
                 <p>home page!!!</p>
                 <button>oh no</button>
