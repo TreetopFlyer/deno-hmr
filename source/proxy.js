@@ -6,7 +6,8 @@ const HMR = {
     registered: new Map(),
     states: new Map(),
     statesOld: new Map(),
-    reloads: 0
+    reloads: 0,
+    wireframe: false
 };
 HMR.onChange =(key, value)=>
 {
@@ -59,15 +60,24 @@ const MapAt =(inMap, inIndex)=>
 
 window.HMR = HMR;
 
-const ProxyElement =(props)=>
+const ProxyElement = (props)=>
 {
     const [stateGet, stateSet] = ReactParts.useState(0);
-    ReactParts.useEffect(()=>HMR.onChange( ()=>stateSet(stateGet+1), "yep" ));
+    ReactParts.useEffect(()=>HMR.onChange( ()=>stateSet(stateGet+1), "ProxyElement" ));
 
-    return H("div", {style:{padding:"10px", border:"2px solid red"}},
-        H("p", null, stateGet),
-        H(...props.__args)
-    );
+    const child = H(...props.__args);
+
+    if(HMR.wireframe)
+    {
+        return H("div", {style:{padding:"10px", border:"2px solid red"}},
+            H("p", null, stateGet),
+            child
+        );
+    }
+    else
+    {
+        return child;
+    }
 };
 
 const ProxyCreate =(...args)=>

@@ -287,14 +287,13 @@ export const useBase =(inDelta=0):string=>
     return segment;
 };
 
-const Empty =(props)=> props.children;
-
 export type SwitchStatus = {Depth:number, Params:Record<string, string>}
 export const SwitchContext:React.Context<SwitchStatus> = React.createContext({Depth:0, Params:{}});
 export type SwitchValue = string|number|boolean
 export const Switch =({ children, value }: { children: JSX.Element | JSX.Element[]; value:SwitchValue|Path  })=>
 {
     const ctx = React.useContext(SwitchContext);
+    const getChildren =(inChild:JSX.Element):JSX.Element=> inChild.props.__args ? inChild.props.__args[2]??null : inChild.props.children??null;
 
     let child = <></>;
     if (!Array.isArray(children))
@@ -312,7 +311,7 @@ export const Switch =({ children, value }: { children: JSX.Element | JSX.Element
                 if(test)
                 {
                     test.Params = {...ctx.Params, ...test.Params};
-                    return <SwitchContext.Provider value={test}>{child.props.children}</SwitchContext.Provider>
+                    return <SwitchContext.Provider value={test}>{getChildren(child)}</SwitchContext.Provider>
                 }
             }
         }
@@ -324,19 +323,19 @@ export const Switch =({ children, value }: { children: JSX.Element | JSX.Element
             child = children[i];
             if (child.props?.value == value)
             {
-                /// hol up. has case been proxied??
-                if(child.props?.__args)
-                {
-                    return child.props.__args[2];
-                }
-                return child.props.children;
+                return getChildren(child);
             }
         }
     }
     // only return the last case as a default if it has no value prop
     if(!child.props?.value)
     {
-        return child.props.children;
+        return getChildren(child);
     }
+    else
+    {
+        return null;
+    }
+
 };
 export const Case = ({ value, children }: { value?: SwitchValue; children: React.ReactNode }) => null;

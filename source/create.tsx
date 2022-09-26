@@ -156,11 +156,11 @@ HMRModuleProxy:async(inModule:string):Promise<string>=>
 },
 
 HMRReactProxy:``};
-let proxyPath = `${FullPaths.Module}/${options.Source}/proxy.tsx`;
-console.log(proxyPath);
-let proxyFile = await fetch(proxyPath);
-let proxyText = await proxyFile.text();
-LitCode.HMRReactProxy = proxyText;
+let proxy:string|Response = `${FullPaths.Module}/${options.Source}/proxy.js`;
+console.log(proxy);
+proxy = await fetch(proxy);
+proxy = await proxy.text();
+LitCode.HMRReactProxy = proxy;
 
 export const Util ={
     Extension: (inPath:string):string => inPath.substring(inPath.lastIndexOf(".")),
