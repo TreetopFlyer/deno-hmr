@@ -29,15 +29,28 @@ export default ({children, open, instant}:{children:React.ReactNode, open:boolea
     {
         if(ref.current)
         {
-            if(initial && open){ return }
-            ref.current.style.height = ref.current.clientHeight + "px";
-            setTimeout(()=>{
-                if(ref.current)
-                {
-                    ref.current.style.height = (open ? ref.current.scrollHeight : 0) + "px";
-                }
-            });
-            doneSet(false);
+            if(initial && open){ return } // initial instant
+
+            if(!doneGet) // interrupted transition
+            {
+                ref.current.style.height = (open ? ref.current.scrollHeight : 0) + "px";
+            }
+            if(doneGet && open) // from standing closed
+            {
+                doneSet(false);
+                ref.current.style.height = ref.current.scrollHeight + "px";
+            }
+            if(doneGet && !open) // from standing open
+            {
+                doneSet(false);
+                ref.current.style.height = ref.current.clientHeight + "px";
+                setTimeout(()=>{
+                    if(ref.current)
+                    {
+                        ref.current.style.height = "0px";
+                    }
+                });
+            }
         }
     }, [open]);
 
