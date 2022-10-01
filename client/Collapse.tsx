@@ -1,9 +1,12 @@
 import React from "react";
-
-type AdjustEvent = "CollapseAdjust"
-type AdjustEventOptions = {bubbles:boolean, detail:number};
-
-const CTX = React.createContext({Adjust:(inAmount:number)=>{console.log(`at root ${inAmount}`)}});
+\
+const CTX = React.createContext(
+    {
+        Adjust:(inAmount:number)=>{},
+        Done:true,
+        Open:true
+    }
+);
 
 export default ({children, open, instant}:{children:React.ReactNode, open:boolean, instant:boolean})=>
 {
@@ -11,6 +14,7 @@ export default ({children, open, instant}:{children:React.ReactNode, open:boolea
     const ref = React.useRef(null as null|HTMLDivElement);
     const [initGet] = React.useState(open?{}:{height:"0px"});
     const [doneGet, doneSet] = React.useState(true);
+    const [openGet, openSet] = React.useState(open);
 
     const DoneHandler = (inEvent:TransitionEvent)=>
     {
@@ -18,7 +22,17 @@ export default ({children, open, instant}:{children:React.ReactNode, open:boolea
         {
             doneSet(true);
         }
-    }
+    };
+
+    const AdjustHandler =(inAmount:number)=>
+    {
+        if(ref.current)
+        {
+            const height = parseInt(ref.current.style.height);
+            ref.current.style.height = `${height + inAmount}px`;
+            Context.Adjust(inAmount);
+        }
+    };
 
     React.useEffect(()=>
     {
@@ -27,13 +41,13 @@ export default ({children, open, instant}:{children:React.ReactNode, open:boolea
             ref.current.addEventListener("transitionend", DoneHandler);
             return ()=> {if(ref.current){ ref.current.removeEventListener("transitionend", DoneHandler); }};
         }
-    }
-    , []);
+    }, []);
 
     React.useEffect(()=>
     {
         if(ref.current)
         {
+            openSet(open);
             if(!doneGet) // interrupted transition
             {
                 ref.current.style.height = (open ? ref.current.scrollHeight : 0) + "px";
@@ -60,18 +74,6 @@ export default ({children, open, instant}:{children:React.ReactNode, open:boolea
     }
     , [open]);
 
-
-    const AdjustActive =(inAmount:number)=>{
-        if(ref.current)
-        {
-            console.log(`Adjust! amount:${inAmount}`);
-            const height = parseInt(ref.current.style.height);
-            ref.current.style.height = `${height + inAmount}px`;
-            Context.Adjust(inAmount);
-        }
-
-    };
-    const AdjustSpoof =(inAmount:number)=>{};
     React.useEffect(()=>
     {
         if(ref.current && doneGet && open)
@@ -81,8 +83,16 @@ export default ({children, open, instant}:{children:React.ReactNode, open:boolea
     }
     , [doneGet]);
 
+    React.useEffect(()=>
+    {
+        if(Context.Done && !Context.Open)
+        {
+            console.log(`--- crush ---`)
+        }
+    }
+    , [Context.Done, Context.Open])
 
     return <div ref={ref} style={{...initGet, transition:"all 3s"}} className="bg-red-500 transition-all duration-1000 overflow-hidden box-border">
-        <CTX.Provider value={{Adjust:doneGet ? AdjustSpoof : AdjustActive}}>{children}</CTX.Provider>
+        <CTX.Provider value={{Adjust:doneGet ? (inAmount:number)=>{} : AdjustHandler, Done:doneGet, Open:openGet}}>{children}</CTX.Provider>
     </div>;
 };
