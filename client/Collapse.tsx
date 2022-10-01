@@ -7,17 +7,18 @@ const CTXMenu = React.createContext(
         Open:true
     }
 );
-const CTXBranch = React.createContext([true, (arg)=>{}] as [boolean, React.Dispatch<React.SetStateAction<boolean>>])
+type BranchState = [open:boolean, instant:boolean];
+const CTXBranch = React.createContext([ [true, false], (arg)=>{}] as [BranchState, React.Dispatch<React.SetStateAction<BranchState>>])
 
 export const Button =({children}:{children:React.ReactNode})=>
 {
     const [openGet, openSet] = React.useContext(CTXBranch);
-    return <div onClick={e=>openSet(!openGet)} className="px-3 py-1 bg-black text(white xs) font-black">{children}</div>
+    return <div onClick={e=>openSet([!openGet[0], false])} className="px-3 py-1 bg-black text(white xs) font-black">{children}</div>
 };
 
 export const Branch =({children, open}:{children:React.ReactNode, open?:boolean})=>
 {
-    const binding = React.useState(open??false);
+    const binding = React.useState([open??false, false] as BranchState);
     return <CTXBranch.Provider value={binding}>
         {children}
     </CTXBranch.Provider>
@@ -27,7 +28,7 @@ export const Menu =({children}:{children:React.ReactNode})=>
 {
     const ContextMenu = React.useContext(CTXMenu);
     const ContextBranch = React.useContext(CTXBranch);
-    const open = ContextBranch[0];
+    const [open, instant] = ContextBranch[0];
     const ref = React.useRef(null as null|HTMLDivElement);
     const [initGet] = React.useState(open?{}:{height:"0px"});
     const [doneGet, doneSet] = React.useState(true);
@@ -65,6 +66,24 @@ export const Menu =({children}:{children:React.ReactNode})=>
         if(ref.current)
         {
             openSet(open);
+
+            console.log(`is isntant?${instant}`)
+            if(instant)
+            {
+                ref.current.style.transition = "none";
+                ref.current.style.height = (open ? ref.current.scrollHeight : 0) + "px";
+                setTimeout(()=>
+                {
+                    if(ref.current)
+                    {
+                        ref.current.style.transition = "";
+                    }
+                });
+                doneSet(true);
+                return;
+            }
+            
+
             if(!doneGet) // interrupted transition
             {
                 ref.current.style.height = (open ? ref.current.scrollHeight : 0) + "px";
@@ -104,13 +123,13 @@ export const Menu =({children}:{children:React.ReactNode})=>
     {
         if(ContextMenu.Done && !ContextMenu.Open)
         {
-            console.log(`--- crush ---`)
-            ContextBranch[1](false)
+            console.log(`--- crush ---`);
+            ContextBranch[1]([false, true]);
         }
     }
     , [ContextMenu.Done, ContextMenu.Open])
 
-    return <div ref={ref} style={{...initGet, transition:"all 0.5s"}} className="bg-red-500 transition-all duration-1000 overflow-hidden box-border">
+    return <div ref={ref} style={{...initGet}} className="bg-red-500 transition-all duration-300 overflow-hidden box-border">
         <CTXMenu.Provider value={{Adjust:doneGet ? (inAmount:number)=>{} : AdjustHandler, Done:doneGet, Open:openGet}}>{children}</CTXMenu.Provider>
     </div>;
 };
