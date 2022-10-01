@@ -4,7 +4,7 @@ export default ({children, open, instant}:{children:React.ReactNode, open:boolea
 {
     const ref = React.useRef(null as null|HTMLDivElement);
     const [doneGet, doneSet] = React.useState(true);
-    const [lockGet, lockSet] = React.useState(false as false|number);
+    const [styleGet, styleSet] = React.useState({height:""});
 
     const DoneHandler = (inEvent:TransitionEvent)=>
     {
@@ -27,13 +27,12 @@ export default ({children, open, instant}:{children:React.ReactNode, open:boolea
     {
         if(ref.current)
         {
-            ref.current.style.height = ref.current.clientHeight + "px";
-            setTimeout(()=>{
-                if(ref.current)
-                {
-                    ref.current.style.height = (open ? ref.current.scrollHeight : 0) + "px";
-                }
-            });
+            if(!doneGet || (!open && doneGet))
+            {
+                ref.current.style.height = ref.current.clientHeight + "px";
+            }
+            console.log("open use effect called (about to set style)")
+            styleSet({height:(open ? ref.current.scrollHeight : 0) + "px"});
             doneSet(false);
         }
     }, [open]);
@@ -46,10 +45,6 @@ export default ({children, open, instant}:{children:React.ReactNode, open:boolea
         }
     }, [doneGet]);
 
-
-    console.log(`col -- render`);
-    return <div>
-        <p>{open ? "open" : "closed"}</p>
-        <div ref={ref} className="bg-red-500 transition-all duration-1000 overflow-hidden box-border">{children}</div>
-    </div>;
+    console.log("render called (using style)")
+    return <div ref={ref} style={styleGet} className="bg-red-500 transition-all duration-1000 overflow-hidden box-border">{children}</div>;
 };
