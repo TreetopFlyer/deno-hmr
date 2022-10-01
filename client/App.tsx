@@ -4,21 +4,13 @@ import { useMetas, useRoute, useFetch, Switch, Case, Metas } from "amber";
 import Blog from "./Blog.tsx";
 import Collapse from "./Collapse.tsx";
 
-const Branch =()=>
+const Branch =({children, open}:{children:React.ReactNode, open?:boolean})=>
 {
-    const [openGet, openSet] = React.useState(true);
+    const [openGet, openSet] = React.useState(open??false);
     return <div>
         <button onClick={e=>openSet(!openGet)}>Click</button>
         <Collapse open={openGet} instant={false}>
-            <div>
-                JSDoc 3 is an API documentation generator for JavaScript, similar to Javadoc or phpDocumentor.
-                You add documentation comments directly to your source code, right alongside the code itself.
-                The JSDoc tool will scan your source code and generate an HTML documentation website for you.
-            </div>
-            <div className="mt-2">
-                JSDoc's purpose is to document the API of your JavaScript application or library.
-                It is assumed that you will want to document things like modules, namespaces, classes, methods, method parameters, and so on.
-            </div>
+            {children}
         </Collapse>
     </div>
 }
@@ -37,7 +29,22 @@ export default ()=>
 
         <Metas title="A Website"/>
 
-        <Branch/>
+        <Branch>
+            <div>
+                JSDoc 3 is an API documentation generator for JavaScript, similar to Javadoc or phpDocumentor.
+                You add documentation comments directly to your source code, right alongside the code itself.
+                The JSDoc tool will scan your source code and generate an HTML documentation website for you.
+            </div>
+            <Branch>
+                <div>
+                    <p className="p-3">anotha one</p>
+                </div>
+            </Branch>
+            <div className="mt-2">
+                JSDoc's purpose is to document the API of your JavaScript application or library.
+                It is assumed that you will want to document things like modules, namespaces, classes, methods, method parameters, and so on.
+            </div>
+        </Branch>
 
         <Switch>
             <Case value="/">
