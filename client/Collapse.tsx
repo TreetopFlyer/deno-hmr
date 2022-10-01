@@ -4,7 +4,7 @@ export default ({children, open, instant}:{children:React.ReactNode, open:boolea
 {
     const ref = React.useRef(null as null|HTMLDivElement);
     const [doneGet, doneSet] = React.useState(true);
-    const [lockGet, lockSet] = React.useState(false as false|number);
+    let initial = false;
 
     const DoneHandler = (inEvent:TransitionEvent)=>
     {
@@ -16,17 +16,20 @@ export default ({children, open, instant}:{children:React.ReactNode, open:boolea
 
     React.useEffect(()=>
     {
+        initial = true;
         if(ref.current)
         {
+            console.log(`moiunt effect`);
             ref.current.addEventListener("transitionend", DoneHandler);
             return ()=> {if(ref.current){ ref.current.removeEventListener("transitionend", DoneHandler); }};
-        } 
+        }
     }, []);
 
     React.useEffect(()=>
     {
         if(ref.current)
         {
+            if(initial && open){ return }
             ref.current.style.height = ref.current.clientHeight + "px";
             setTimeout(()=>{
                 if(ref.current)
@@ -42,6 +45,7 @@ export default ({children, open, instant}:{children:React.ReactNode, open:boolea
     {
         if(ref.current && doneGet && open)
         {
+            console.log(`doneGet effect`)
             ref.current.style.height = "";
         }
     }, [doneGet]);
