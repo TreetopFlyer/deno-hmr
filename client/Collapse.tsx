@@ -1,61 +1,55 @@
 import React from "react";
 
-export const Collapse =({open, instant, className, children}:{open:boolean, instant:boolean, className?:string, children:React.ReactNode})=>
+export default ({children, open, instant}:{children:React.ReactNode, open:boolean, instant:boolean})=>
 {
-    const [heightGet, heightSet] = React.useState(open ? "auto" : "0px");
-    const [movingGet, movingSet] = React.useState(false);
-    const container = React.useRef(null);
-    const style = { height: heightGet, overflow: open ? "visible" : "hidden", transition: "height 1.0s" };
+    const ref = React.useRef(null as null|HTMLDivElement);
+    const [doneGet, doneSet] = React.useState(true);
+    const [lockGet, lockSet] = React.useState(false as false|number);
 
-    const handleEnd =()=>
+    const DoneHandler = (inEvent:TransitionEvent)=>
     {
-        movingSet(false);
-        if(container.current)
+        if(inEvent.target == ref.current && inEvent.propertyName == "height")
         {
-            const el = container.current as Element;
-            el.style.overflow = open ? "visible" : "hidden";
-            el.style.height = open ? "auto" : "0px";
+            doneSet(true);
         }
-    };
+    }
 
     React.useEffect(()=>
     {
-        if(container.current)
+        if(ref.current)
         {
-            const el = container.current as Element;
-            el.addEventListener("transitionend", handleEnd);
-            
-            movingSet(true);
-            el.style.overflow = "hidden";
+            ref.current.addEventListener("transitionend", DoneHandler);
+            return ()=> {if(ref.current){ ref.current.removeEventListener("transitionend", DoneHandler); }};
+        } 
+    }, []);
 
-            if(open)
-            {
-                el.style.height = el.scrollHeight+"px";
-            }
-            else
-            {
-                if(!movingGet)
+    React.useEffect(()=>
+    {
+        if(ref.current)
+        {
+            ref.current.style.height = ref.current.clientHeight + "px";
+            setTimeout(()=>{
+                if(ref.current)
                 {
-                    el.style.transition = "none";
-                    el.style.height = el.clientHeight+"px";
-                    setTimeout(()=>
-                    {
-                        el.style.height = "0px";
-                        el.style.transition = style.transition;
-                    });
+                    ref.current.style.height = (open ? ref.current.scrollHeight : 0) + "px";
                 }
-                else
-                {
-                    el.style.height = "0px";
-                }
-            }
-
-            return ()=> el.removeEventListener("transitionend", handleEnd);
+            });
+            doneSet(false);
         }
+    }, [open]);
 
-    }, [open, children]);
-    
-    return <div ref={container} style={style} className={className}>
-        {children}
-    </div>
-}
+    React.useEffect(()=>
+    {
+        if(ref.current && doneGet && open)
+        {
+            ref.current.style.height = "";
+        }
+    }, [doneGet]);
+
+
+    console.log(`col -- render`);
+    return <div>
+        <p>{open ? "open" : "closed"}</p>
+        <div ref={ref} className="bg-red-500 transition-all duration-1000 overflow-hidden box-border">{children}</div>
+    </div>;
+};
