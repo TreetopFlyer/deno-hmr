@@ -2,18 +2,7 @@ import React from "react";
 import Search from "./Search.tsx";
 import { useMetas, useRoute, useFetch, Switch, Case, Metas } from "amber";
 import Blog from "./Blog.tsx";
-import Collapse from "./Collapse.tsx";
-
-const Branch =({children, open}:{children:React.ReactNode, open?:boolean})=>
-{
-    const [openGet, openSet] = React.useState(open??false);
-    return <div>
-        <button onClick={e=>openSet(!openGet)}>Click</button>
-        <Collapse open={openGet} instant={false}>
-            {children}
-        </Collapse>
-    </div>
-}
+import { Menu, Branch, Button } from "./Collapse.tsx";
 
 export default ()=>
 {   
@@ -30,20 +19,55 @@ export default ()=>
         <Metas title="A Website"/>
 
         <Branch>
-            <div>
-                JSDoc 3 is an API documentation generator for JavaScript, similar to Javadoc or phpDocumentor.
-                You add documentation comments directly to your source code, right alongside the code itself.
-                The JSDoc tool will scan your source code and generate an HTML documentation website for you.
-            </div>
-            <Branch>
-                <div>
-                    <p className="p-3">anotha one</p>
-                </div>
-            </Branch>
-            <div className="mt-2">
-                JSDoc's purpose is to document the API of your JavaScript application or library.
-                It is assumed that you will want to document things like modules, namespaces, classes, methods, method parameters, and so on.
-            </div>
+            <Button>Click a</Button>
+            <Menu>
+                <Branch>
+                    <Button>Click b</Button>
+                    <Menu>
+                        <div>
+                            JSDoc 3 is an API documentation generator for JavaScript, similar to Javadoc or phpDocumentor.
+                            You add documentation comments directly to your source code, right alongside the code itself.
+                            The JSDoc tool will scan your source code and generate an HTML documentation website for you.
+                        </div>
+                    </Menu>
+                </Branch>
+                <Branch>
+                    <Button>Click c</Button>
+                    <Menu>
+                        <div>
+                            JSDoc 3 is an API documentation generator for JavaScript, similar to Javadoc or phpDocumentor.
+                            You add documentation comments directly to your source code, right alongside the code itself.
+                        </div>
+                        <div>
+                            <p className="p-3">anotha one</p>
+                        </div>
+
+                        <Branch>
+                            <Button>Click d</Button>
+                            <Menu>
+                                <div>
+                                    JSDoc 3 is an API documentation generator for JavaScript, similar to Javadoc or phpDocumentor.
+                                    You add documentation comments directly to your source code, right alongside the code itself.
+                                    The JSDoc tool will scan your source code and generate an HTML documentation website for you.
+                                </div>
+                            </Menu>
+                        </Branch>
+                        <Branch>
+                            <Button>Click e</Button>
+                            <Menu>
+                                <div>
+                                    JSDoc 3 is an API documentation generator for JavaScript, similar to Javadoc or phpDocumentor.
+                                    You add documentation comments directly to your source code, right alongside the code itself.
+                                </div>
+                                <div>
+                                    <p className="p-3">anotha one</p>
+                                </div>
+                            </Menu>
+                        </Branch>
+
+                    </Menu>
+                </Branch>
+            </Menu>
         </Branch>
 
         <Switch>

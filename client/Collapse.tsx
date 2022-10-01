@@ -1,16 +1,33 @@
 import React from "react";
-\
-const CTX = React.createContext(
+
+const CTXMenu = React.createContext(
     {
         Adjust:(inAmount:number)=>{},
         Done:true,
         Open:true
     }
 );
+const CTXBranch = React.createContext([true, (arg)=>{}] as [boolean, React.Dispatch<React.SetStateAction<boolean>>])
 
-export default ({children, open, instant}:{children:React.ReactNode, open:boolean, instant:boolean})=>
+export const Button =({children}:{children:React.ReactNode})=>
 {
-    const Context = React.useContext(CTX);
+    const [openGet, openSet] = React.useContext(CTXBranch);
+    return <div onClick={e=>openSet(!openGet)} className="px-3 py-1 bg-black text(white xs) font-black">{children}</div>
+};
+
+export const Branch =({children, open}:{children:React.ReactNode, open?:boolean})=>
+{
+    const binding = React.useState(open??false);
+    return <CTXBranch.Provider value={binding}>
+        {children}
+    </CTXBranch.Provider>
+};
+
+export const Menu =({children}:{children:React.ReactNode})=>
+{
+    const ContextMenu = React.useContext(CTXMenu);
+    const ContextBranch = React.useContext(CTXBranch);
+    const open = ContextBranch[0];
     const ref = React.useRef(null as null|HTMLDivElement);
     const [initGet] = React.useState(open?{}:{height:"0px"});
     const [doneGet, doneSet] = React.useState(true);
@@ -30,7 +47,7 @@ export default ({children, open, instant}:{children:React.ReactNode, open:boolea
         {
             const height = parseInt(ref.current.style.height);
             ref.current.style.height = `${height + inAmount}px`;
-            Context.Adjust(inAmount);
+            ContextMenu.Adjust(inAmount);
         }
     };
 
@@ -69,7 +86,7 @@ export default ({children, open, instant}:{children:React.ReactNode, open:boolea
                 });
             }
 
-            Context.Adjust(open ? ref.current.scrollHeight : -ref.current.scrollHeight);
+            ContextMenu.Adjust(open ? ref.current.scrollHeight : -ref.current.scrollHeight);
         }
     }
     , [open]);
@@ -85,14 +102,15 @@ export default ({children, open, instant}:{children:React.ReactNode, open:boolea
 
     React.useEffect(()=>
     {
-        if(Context.Done && !Context.Open)
+        if(ContextMenu.Done && !ContextMenu.Open)
         {
             console.log(`--- crush ---`)
+            ContextBranch[1](false)
         }
     }
-    , [Context.Done, Context.Open])
+    , [ContextMenu.Done, ContextMenu.Open])
 
-    return <div ref={ref} style={{...initGet, transition:"all 3s"}} className="bg-red-500 transition-all duration-1000 overflow-hidden box-border">
-        <CTX.Provider value={{Adjust:doneGet ? (inAmount:number)=>{} : AdjustHandler, Done:doneGet, Open:openGet}}>{children}</CTX.Provider>
+    return <div ref={ref} style={{...initGet, transition:"all 0.5s"}} className="bg-red-500 transition-all duration-1000 overflow-hidden box-border">
+        <CTXMenu.Provider value={{Adjust:doneGet ? (inAmount:number)=>{} : AdjustHandler, Done:doneGet, Open:openGet}}>{children}</CTXMenu.Provider>
     </div>;
 };
