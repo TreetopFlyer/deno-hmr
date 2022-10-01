@@ -2,7 +2,7 @@ import React from "react";
 import Search from "./Search.tsx";
 import { useMetas, useRoute, useFetch, Switch, Case, Metas } from "amber";
 import Blog from "./Blog.tsx";
-import { Menu, Branch, Button } from "./Collapse.tsx";
+import { Branch, BranchMenu, BranchButton } from "./Collapse.tsx";
 
 export default ()=>
 {   
@@ -18,22 +18,22 @@ export default ()=>
 
         <Metas title="A Website"/>
 
-        <Branch>
-            <Button>Click a</Button>
-            <Menu>
+        <Branch  away={true}>
+            <BranchButton>Click a</BranchButton>
+            <BranchMenu>
                 <Branch>
-                    <Button>Click b</Button>
-                    <Menu>
+                    <BranchButton>Click b</BranchButton>
+                    <BranchMenu className="bg-red-500">
                         <div>
                             JSDoc 3 is an API documentation generator for JavaScript, similar to Javadoc or phpDocumentor.
                             You add documentation comments directly to your source code, right alongside the code itself.
                             The JSDoc tool will scan your source code and generate an HTML documentation website for you.
                         </div>
-                    </Menu>
+                    </BranchMenu>
                 </Branch>
                 <Branch>
-                    <Button>Click c</Button>
-                    <Menu>
+                    <BranchButton>Click c</BranchButton>
+                    <BranchMenu>
                         <div>
                             JSDoc 3 is an API documentation generator for JavaScript, similar to Javadoc or phpDocumentor.
                             You add documentation comments directly to your source code, right alongside the code itself.
@@ -43,18 +43,18 @@ export default ()=>
                         </div>
 
                         <Branch>
-                            <Button>Click d</Button>
-                            <Menu>
+                            <BranchButton>Click d</BranchButton>
+                            <BranchMenu>
                                 <div>
                                     JSDoc 3 is an API documentation generator for JavaScript, similar to Javadoc or phpDocumentor.
                                     You add documentation comments directly to your source code, right alongside the code itself.
                                     The JSDoc tool will scan your source code and generate an HTML documentation website for you.
                                 </div>
-                            </Menu>
+                            </BranchMenu>
                         </Branch>
                         <Branch>
-                            <Button>Click e</Button>
-                            <Menu>
+                            <BranchButton>Click e</BranchButton>
+                            <BranchMenu>
                                 <div>
                                     JSDoc 3 is an API documentation generator for JavaScript, similar to Javadoc or phpDocumentor.
                                     You add documentation comments directly to your source code, right alongside the code itself.
@@ -62,12 +62,12 @@ export default ()=>
                                 <div>
                                     <p className="p-3">anotha one</p>
                                 </div>
-                            </Menu>
+                            </BranchMenu>
                         </Branch>
 
-                    </Menu>
+                    </BranchMenu>
                 </Branch>
-            </Menu>
+            </BranchMenu>
         </Branch>
 
         <Switch>
