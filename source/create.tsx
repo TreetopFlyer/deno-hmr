@@ -337,7 +337,7 @@ serve(async(inRequest)=>
 
 /** File System Launcher/Watcher ******************************************/
 const sheet = TwindServer.virtualSheet();
-const parse = Twind.create({ sheet: sheet, preflight: true, theme:Loaded.Themed.plugins, plugins:Loaded.Themed.plugins, mode: "silent" }).tw;
+const parse = Twind.create({ sheet: sheet, preflight: false, theme:Loaded.Themed.plugins, plugins:Loaded.Themed.plugins, mode: "silent" }).tw;
 const leave = [ "__defineGetter__", "__defineSetter__", "__lookupGetter__", "__lookupSetter__", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable", "valueOf", "toLocaleString" ];
 
 localStorage.clear();
@@ -370,7 +370,7 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
                 localStorage.setItem(webPath+".pxy", proxy);
                 if(options.Server)
                 {
-                    const m = parsed.code.match(/[^<>\[\]\(\)|&"'`\.\s]*[^<>\[\]\(\)|&"'`\.\s:]/g);
+                    const m = parsed.code.match(/(?<=(["']))(?:(?=(\\?))\2.)*?(?=\1)/g);
                     if (m)
                     {
                         for (const c of m)
