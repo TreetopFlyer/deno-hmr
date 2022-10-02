@@ -42,7 +42,7 @@ const XPileOptions = options.Server ? {loader:"tsx", minify:true} : {loader:"tsx
 
 export type LoadedResources = {
     Import:{imports:{[key:string]:string}},
-    Themed:{theme:Twind.ThemeConfiguration, plugins:Record<string, Twind.Plugin | undefined>},
+    Themed:{theme:Twind.ThemeConfiguration, plugins:Record<string, Twind.Plugin | undefined>, preflight:boolean|Twind.Preflight},
     Launch:{App:AppComponent, Shell:ShellComponent};
 };
 export const Loaded:LoadedResources =
@@ -69,7 +69,7 @@ export const Loaded:LoadedResources =
             </html>;
         }
     },
-    Themed:{theme:{}, plugins:{}}
+    Themed:{theme:{}, plugins:{}, preflight:true}
 };
 export const FullPaths = {
     Import: `file://${options.Active}/${options.Import}`,
@@ -198,6 +198,7 @@ try
     {
         Loaded.Themed.plugins = twindImport.default.plugins??{};
         Loaded.Themed.theme = twindImport.default.theme??{};
+        Loaded.Themed.preflight = twindImport.default.preflight??true;
     }
 }
 catch(e) { console.log(`Amber Start: (ERROR) loading twind config "${FullPaths.Themed}" ${e}`) }
@@ -337,8 +338,61 @@ serve(async(inRequest)=>
 
 /** File System Launcher/Watcher ******************************************/
 const sheet = TwindServer.virtualSheet();
-const parse = Twind.create({ sheet: sheet, preflight: false, theme:Loaded.Themed.plugins, plugins:Loaded.Themed.plugins, mode: "silent" }).tw;
+const parse = Twind.create({ ...Loaded.Themed, sheet: sheet, mode: "silent" }).tw;
 const leave = [ "__defineGetter__", "__defineSetter__", "__lookupGetter__", "__lookupSetter__", "hasOwnProperty", "isPrototypeOf", "propertyIsEnumerable", "valueOf", "toLocaleString" ];
+const Expander =(file:string, inTwindConfig:LoadedResources["Themed"], inTwindTW:Twind.TW)=>
+{
+    const TestSheet = TwindServer.virtualSheet();
+    const TestTwind = Twind.create({ ...inTwindConfig, sheet: TestSheet, preflight: false, mode: "silent" });
+
+    const fileOut:string[] = [];
+    let match = 0;
+    const getNextRange =()=>
+    {
+        const firstQuote = file.indexOf(`"`, match);
+        if(firstQuote == -1){
+            fileOut.push(file.substring(match));
+            return false;
+        }
+        const secondQuote =  file.indexOf(`"`, firstQuote+1);
+        if(secondQuote == -1){
+            console.error("document is malformed, odd number of quotation marks")
+            return false;
+        }
+
+        const tail = file.substring(match, firstQuote)
+        fileOut.push(tail);
+        match = secondQuote + 1;
+
+        const sample = file.substring(firstQuote+1, secondQuote);
+        TestSheet.reset();
+        TwindServer.shim(`<a class="${sample}"`, TestTwind);
+        if(TwindServer.getStyleTagProperties(TestSheet).textContent == "")
+        {
+            fileOut.push(sample);
+        }
+        else
+        {
+            inTwindTW(sample);
+            fileOut.push(Twind.expandGroups(sample));
+        }
+
+        if(secondQuote == file.length-1)
+        {
+            fileOut.push("");
+        }
+
+        return [firstQuote, secondQuote];
+    };
+    let parse = getNextRange();
+    while(parse)
+    {
+        parse = getNextRange();
+    }
+
+    return fileOut.join(`"`);
+};
+
 
 localStorage.clear();
 const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):Promise<string>=>
@@ -366,10 +420,12 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
             {
                 const parsed = await ESBuild.transform(code, XPileOptions);
                 const proxy = await LitCode.HMRModuleProxy(webPath);
-                localStorage.setItem(webPath, parsed.code);
                 localStorage.setItem(webPath+".pxy", proxy);
                 if(options.Server)
                 {
+                    const expanded = Expander(parsed.code, Loaded.Themed, parse);
+                    localStorage.setItem(webPath, expanded);
+                    /*
                     const m = parsed.code.match(/(?<=(["']))(?:(?=(\\?))\2.)*?(?=\1)/g);
                     if (m)
                     {
@@ -382,6 +438,11 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
                             }
                         }
                     }
+                    */
+                }
+                else
+                {
+                    localStorage.setItem(webPath, parsed.code);
                 }
             }
             else
@@ -414,6 +475,7 @@ for await (const entry of walk(options.Active+"/"+options.Client, {includeDirs:f
 {
     await XPile(entry.path, true);
 }
+console.log(localStorage.getItem("/client/Collapse.tsx"))
 
 // import the Amber client from a potentially remote location and transpile it
 const path = import.meta.url.split("/").slice(0, -2).join("/")+RoutePaths.Amber;
