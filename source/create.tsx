@@ -374,7 +374,12 @@ const Expander =(file:string, inTwindConfig:LoadedResources["Themed"], inTwindTW
         else
         {
             inTwindTW(sample);
-            fileOut.push(Twind.expandGroups(sample));
+            const expanded = Twind.expandGroups(sample);
+            if(expanded.length > sample.length)
+            {
+                console.error(`Twind group syntax won't work in production: ${sample}`)
+            }
+            fileOut.push(expanded);
         }
 
         if(secondQuote == file.length-1)
@@ -475,7 +480,6 @@ for await (const entry of walk(options.Active+"/"+options.Client, {includeDirs:f
 {
     await XPile(entry.path, true);
 }
-console.log(localStorage.getItem("/client/Collapse.tsx"))
 
 // import the Amber client from a potentially remote location and transpile it
 const path = import.meta.url.split("/").slice(0, -2).join("/")+RoutePaths.Amber;
