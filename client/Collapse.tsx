@@ -10,13 +10,51 @@ const CTXMenu = React.createContext(
 type BranchState = [open:boolean, instant:boolean];
 const CTXBranch = React.createContext([ [true, false], (arg)=>{}] as [BranchState, React.Dispatch<React.SetStateAction<BranchState>>])
 
+export const useScreenSize =(inSize:number)=>
+{
+    const [sizeGet, sizeSet] = React.useState(document.body.clientWidth > inSize);
+
+    React.useEffect(()=>{
+        let debounce = false;
+        let size = document.body.clientWidth;
+        let dirty = false;
+
+        const bounce =()=>
+        {
+            debounce = true;
+            setTimeout(() => {
+                if(dirty)
+                {
+                    sizeSet(size > inSize);
+                    bounce();
+                }
+                else
+                {
+                    dirty = false;
+                    debounce = false;
+                }
+            }, 500);
+        };
+        const resize =(e)=>
+        {
+            size = document.body.clientWidth;
+            debounce ? dirty = true : bounce();
+        };
+
+        window.addEventListener("resize", resize);
+        return ()=>window.removeEventListener("resize", resize);
+
+    }, []);
+    return sizeGet;
+}
+
 export const BranchButton =({children}:{children:React.ReactNode})=>
 {
     const [openGet, openSet] = React.useContext(CTXBranch);
     return <div onClick={e=>openSet([!openGet[0], false])} className="px-3 py-1 bg-black text(white xs) font-black">{children}</div>
 };
 
-export const Branch =({children, open, away}:{children:React.ReactNode, open?:boolean, away?:boolean})=>
+export const Branch =({children, open, away, style, className}:{children:React.ReactNode, open?:boolean, away?:boolean, style?:Record<string, string>, className?:string})=>
 {
     const binding = React.useState([open??false, false] as BranchState);
     const ref = React.useRef(null as null|HTMLDivElement);
@@ -37,14 +75,14 @@ export const Branch =({children, open, away}:{children:React.ReactNode, open?:bo
         }
     }, []);
 
-    return <div ref={ref}>
+    return <div ref={ref} style={style} className={className}>
         <CTXBranch.Provider value={binding}>
             {children}
         </CTXBranch.Provider>
     </div>
 };
 
-export const BranchMenu =({children, style, className, away}:{children:React.ReactNode, style?:Record<string, string>, className?:string})=>
+export const BranchMenu =({children, style, className}:{children:React.ReactNode, style?:Record<string, string>, className?:string})=>
 {
     const ContextMenu = React.useContext(CTXMenu);
     const ContextBranch = React.useContext(CTXBranch);

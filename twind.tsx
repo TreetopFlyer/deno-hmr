@@ -4,14 +4,22 @@ const stroke = {
 };
 export default 
 {
+    preflight:
+    {
+        "@import": `url('https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@200;400;900&display=swap')`
+    },
     theme:
     {
         extend:
         {
+            colors:
+            {
+                "coal":"#333",
+                "denim": "#153b6a"
+            },
             fontFamily:
             {
-                sans: ['Brandon', 'Century Gothic', 'sans-serif'],
-                serif: ['Georgia']
+                sans: ["Nunito"]
             },
             spacing:{...stroke},
             borderWidth:{...stroke}
