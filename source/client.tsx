@@ -163,7 +163,6 @@ export function useMetas(arg?:KeyedMeta):KeyedMeta
         {
             if(state.Client)
             {
-                console.log("USeMeta", action.payload.Meta.Title);
                 dispatch(action);
                 return ()=>
                 {
@@ -182,13 +181,18 @@ export const Metas =({title, descr, image}:{title?:string, descr?:string, image?
     if(descr){metas.Description = descr;}
     if(image){metas.Image = image;}
     useMetas(metas);
-    console.log(`rendering <meta/> ${title}`)
     return <em>you set {title}</em>;
 }
 
-export const useFetch =(url:string):CacheRecord=>
+export const useFetch =(url:string, options:{proxy?:boolean}):CacheRecord=>
 {
     const [state, dispatch] = React.useContext(IsoContext);
+
+    if(options?.proxy)
+    {
+        url = "/proxy/"+encodeURIComponent(url);
+    }
+    
     const match:CacheRecord|null = state.Data[url];
     if(!match)
     {

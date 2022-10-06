@@ -1,22 +1,12 @@
 import React from "react";
 
-const CTXMenu = React.createContext(
-    {
-        Adjust:(inAmount:number)=>{},
-        Done:true,
-        Open:true
-    }
-);
-type BranchState = [open:boolean, instant:boolean];
-const CTXBranch = React.createContext([ [true, false], (arg)=>{}] as [BranchState, React.Dispatch<React.SetStateAction<BranchState>>])
-
 export const useScreenSize =(inSize:number)=>
 {
-    const [sizeGet, sizeSet] = React.useState(document.body.clientWidth > inSize);
+    const [sizeGet, sizeSet] = React.useState(window.innerWidth > inSize);
 
     React.useEffect(()=>{
         let debounce = false;
-        let size = document.body.clientWidth;
+        let size = window.innerWidth;
         let dirty = false;
 
         const bounce =()=>
@@ -35,9 +25,9 @@ export const useScreenSize =(inSize:number)=>
                 }
             }, 500);
         };
-        const resize =(e)=>
+        const resize =()=>
         {
-            size = document.body.clientWidth;
+            size = window.innerWidth;
             debounce ? dirty = true : bounce();
         };
 
@@ -46,17 +36,33 @@ export const useScreenSize =(inSize:number)=>
 
     }, []);
     return sizeGet;
-}
+};
 
-export const BranchButton =({children}:{children:React.ReactNode})=>
+
+const CTXMenu = React.createContext(
+    {
+        Adjust:(inAmount:number)=>{},
+        Done:true,
+        Open:true
+    }
+);
+
+type BranchState = [open:boolean, instant:boolean, threshold:boolean];
+const CTXBranch = React.createContext([ [true, false, true], (arg)=>{}] as [BranchState, React.Dispatch<React.SetStateAction<BranchState>>])
+
+export const BranchButton =({children, style, className, classActive}:{children:React.ReactNode, style?:Record<string, string>, className?:string, classActive?:string})=>
 {
+    /// BranchState
     const [openGet, openSet] = React.useContext(CTXBranch);
-    return <div onClick={e=>openSet([!openGet[0], false])} className="px-3 py-1 bg-black text(white xs) font-black">{children}</div>
+    let classes = className;
+    if(openGet[0]){ classes += " " + classActive??"" }
+    return <div style={style} onClick={e=>openSet([!openGet[0], false, openGet[2]])} className={ classes }><p>{openGet[0]?"open":"closed"}</p>{children}</div>;
 };
 
 export const Branch =({children, open, away, style, className}:{children:React.ReactNode, open?:boolean, away?:boolean, style?:Record<string, string>, className?:string})=>
 {
-    const binding = React.useState([open??false, false] as BranchState);
+    /// BranchState
+    const binding = React.useState([open??false, false, open??false] as BranchState);
     const ref = React.useRef(null as null|HTMLDivElement);
 
     React.useEffect(()=>
@@ -67,7 +73,8 @@ export const Branch =({children, open, away, style, className}:{children:React.R
             {
                 if(ref.current && !ref.current.contains(inEvent.target))
                 {
-                    binding[1]([false, false]);
+                    /// BranchState
+                    binding[1]([false, false, binding[0][2]]);
                 }
             }
             document.addEventListener("click", handler);
@@ -180,13 +187,13 @@ export const BranchMenu =({children, style, className}:{children:React.ReactNode
     {
         if(ContextMenu.Done && !ContextMenu.Open)
         {
-            console.log(`--- crush ---`);
-            ContextBranch[1]([false, true]);
+            /// BranchState
+            ContextBranch[1]([false, true, ContextBranch[0][2]]);
         }
     }
-    , [ContextMenu.Done, ContextMenu.Open])
+    , [ContextMenu.Done, ContextMenu.Open]);
 
-    return <div ref={ref} style={{...initGet, ...style}} className={"transition-all duration-300 overflow-hidden "+className}>
+    return <div ref={ref} style={{...initGet, ...style}} className={"transition-all duration-300 overflow-hidden " + className}>
         <CTXMenu.Provider value={{Adjust:doneGet ? (inAmount:number)=>{} : AdjustHandler, Done:doneGet, Open:openGet}}>{children}</CTXMenu.Provider>
     </div>;
 };

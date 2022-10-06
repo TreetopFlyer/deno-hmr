@@ -96,7 +96,6 @@ const dom = document.querySelector("#app");
 const url = new URL(location.href);
 const app =()=>
 {
-    console.log("UBER ROOT RENDER");
     return h(IsoProvider, {seed:iso}, h(App));
 }
 
@@ -312,6 +311,12 @@ serve(async(inRequest)=>
         }
         catch { return new Response("404", {status:404}); }
     }
+    else if(url.pathname.startsWith("/proxy/"))
+    {
+        const urlPassed = url.pathname.substring(("/proxy/").length);
+        const response = await fetch(decodeURIComponent(urlPassed));
+        return response;
+    }
     else
     {
         const isoModel:State = { Meta:{}, MetaStack:[], Data:{}, Path:PathParse(url), Client:false, Queue:[] }
@@ -428,9 +433,12 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
                 localStorage.setItem(webPath+".pxy", proxy);
                 if(options.Server)
                 {
+                    /*
                     const expanded = Expander(parsed.code, Loaded.Themed, parse);
                     localStorage.setItem(webPath, expanded);
-                    /*
+                    */
+                    localStorage.setItem(webPath, parsed.code);
+                    
                     const m = parsed.code.match(/(?<=(["']))(?:(?=(\\?))\2.)*?(?=\1)/g);
                     if (m)
                     {
@@ -443,7 +451,7 @@ const XPile =async(inFullProjectPath:string, checkFirst=false, deletion=false):P
                             }
                         }
                     }
-                    */
+                    
                 }
                 else
                 {

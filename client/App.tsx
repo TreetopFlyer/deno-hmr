@@ -1,11 +1,13 @@
 import React from "react";
-import { useRoute, Switch, Case, Metas } from "amber";
+import { useFetch, useRoute, Switch, Case, Metas } from "amber";
 import Blog from "./Blog.tsx";
 import Nav from "./Nav.tsx";
 
 export default ()=>
 {   
     const [route] = useRoute();
+
+    //const Sermons = useFetch(`https://truthforlife.org/resources/sermons/recent/json/`, {proxy:true});
 
     return <div className="bg-denim">
 

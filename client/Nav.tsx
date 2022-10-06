@@ -5,8 +5,11 @@ import { Branch, BranchMenu, BranchButton, useScreenSize } from "./Collapse.tsx"
 const Menu =({title, children}:{title:string, children:React.ReactNode})=>
 {
     return <Branch className="flex-1" away>
-        <BranchButton>{title}</BranchButton>
-        <BranchMenu className="md:absolute bg-black flex flex-col duration-1000">
+        <BranchButton
+            className="p-4 text-white bg-black transition-all duration-500"
+            classActive="text-black bg-white">{title}
+        </BranchButton>
+        <BranchMenu className={"md:absolute bg-black flex flex-col"}>
             {children}
         </BranchMenu>
     </Branch>;
