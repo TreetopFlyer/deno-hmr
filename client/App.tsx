@@ -39,7 +39,6 @@ export default ()=>
             <Case value="/">
                 <Metas title="Home"/>
                 <p>home page!!!</p>
-                <button>oh no</button>
                 <Switch value={Sermons.Pending}>
                     <Case value={true}>Loading...</Case>
                     <Case>{Sermons.JSON && Sermons.JSON[0].title} </Case>

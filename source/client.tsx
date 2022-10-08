@@ -97,21 +97,6 @@ const Reducer =(inState:State, inAction:Actions)=>
     return output;
 };
 
-const Loader = async(inURL:string, inDispatcher:(inAction:Actions)=>void):Promise<void>=>
-{
-    let error = false;
-    let text:false|string = false;
-    inDispatcher({type:"DataReplace", payload:[inURL, { Data: false, Error: false, Expiry: 0, Pending: true }]});
-    try
-    {
-        const response = await fetch(inURL);
-        text = await response.text();
-        if(response.status !== 200) { throw text; }   
-    }
-    catch(e:unknown){ error = true; console.log("fetch error", e, inURL); }
-    inDispatcher({type:"DataReplace", payload:[inURL, { Data: text, Error: error, Expiry: 0, Pending: false }]});
-};
-
 export const PathParse =(route:URL)=>
 {
     const query:{[key:string]:string} = {};
@@ -184,21 +169,33 @@ export const Metas =({title, descr, image}:{title?:string, descr?:string, image?
     return <em>you set {title}</em>;
 }
 
+
+const LeLoader = async(inURL:string, inOptions:FetchOptions):Promise<void>=>
+{
+    const [state, dispatch] = React.useContext(IsoContext);
+    let error = false;
+    let text:false|string = false;
+    dispatch({type:"DataReplace", payload:[inURL, { Data: false, Error: false, Expiry: 0, Pending: true }]});
+    try
+    {
+        const response = await fetch((inOptions.proxy && state.Client) ? "/proxy/"+encodeURIComponent(inURL) : inURL);
+        text = await response.text();
+        if(response.status !== 200) { throw text; }   
+    }
+    catch(e:unknown){ error = true; console.log("fetch error", e, inURL); }
+    dispatch({type:"DataReplace", payload:[inURL, { Data: text, Error: error, Expiry: 0, Pending: false }]});
+};
 type ParsedCacheRecord = CacheRecord & {JSON?:false|unknown}
-export const useFetch =(url:string, options?:{proxy?:boolean, parse?:boolean}):ParsedCacheRecord=>
+type FetchOptions = {proxy?:boolean, parse?:boolean}
+export const useFetch =(url:string, options?:FetchOptions):ParsedCacheRecord=>
 {
     const [state, dispatch] = React.useContext(IsoContext);
     const parsed = React.useRef(null);
 
-    if(options?.proxy)
-    {
-        url = "/proxy/"+encodeURIComponent(url);
-    }
-    
     const match:ParsedCacheRecord|null = state.Data[url];
     if(!match)
     {
-        const pending = Loader(url, dispatch);
+        const pending = LeLoader(url, {proxy:true, parse:true, ...options});
         if(!state.Client){ state.Queue.push(pending); }
         return { Data: false, Error: false, Expiry: 0, Pending: true, JSON:false };
     }

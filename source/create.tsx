@@ -57,6 +57,7 @@ export const Loaded:LoadedResources =
                     <title>{isoModel.Meta.Title??""}</title>
                     <link rel="canonical" href={isoModel.Path.Parts.join("/")}></link>
                     <link rel="icon" type="image/x-icon" href="/static/favicon.ico"></link>
+                    <meta charset="UTF-8"/>
                     <meta name="viewport" content="width=device-width, initial-scale=1"/>
                     <meta name="description" content={isoModel.Meta.Description??""}/>
                     <style id="tw-main" dangerouslySetInnerHTML={{__html:styles}}/>
@@ -351,7 +352,7 @@ serve(async(inRequest)=>
         return new Response(stream, {status:200, headers:{"content-type":"text/html"}});
     }
 
-}, {port:8000});
+}, {port:options.Deploy});
 
 /** File System Launcher/Watcher ******************************************/
 const sheet = TwindServer.virtualSheet();
