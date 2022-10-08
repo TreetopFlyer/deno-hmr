@@ -2,7 +2,7 @@ import React from "react";
 
 export const useScreenSize =(inSize:number)=>
 {
-    const [sizeGet, sizeSet] = React.useState(window.innerWidth > inSize);
+    const [sizeGet, sizeSet] = React.useState(false);
 
     React.useEffect(()=>{
         let debounce = false;
@@ -31,6 +31,7 @@ export const useScreenSize =(inSize:number)=>
             debounce ? dirty = true : bounce();
         };
 
+        sizeSet(size > inSize);
         window.addEventListener("resize", resize);
         return ()=>window.removeEventListener("resize", resize);
 

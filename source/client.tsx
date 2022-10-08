@@ -170,21 +170,6 @@ export const Metas =({title, descr, image}:{title?:string, descr?:string, image?
 }
 
 
-const LeLoader = async(inURL:string, inOptions:FetchOptions):Promise<void>=>
-{
-    const [state, dispatch] = React.useContext(IsoContext);
-    let error = false;
-    let text:false|string = false;
-    dispatch({type:"DataReplace", payload:[inURL, { Data: false, Error: false, Expiry: 0, Pending: true }]});
-    try
-    {
-        const response = await fetch((inOptions.proxy && state.Client) ? "/proxy/"+encodeURIComponent(inURL) : inURL);
-        text = await response.text();
-        if(response.status !== 200) { throw text; }   
-    }
-    catch(e:unknown){ error = true; console.log("fetch error", e, inURL); }
-    dispatch({type:"DataReplace", payload:[inURL, { Data: text, Error: error, Expiry: 0, Pending: false }]});
-};
 type ParsedCacheRecord = CacheRecord & {JSON?:false|unknown}
 type FetchOptions = {proxy?:boolean, parse?:boolean}
 export const useFetch =(url:string, options?:FetchOptions):ParsedCacheRecord=>
@@ -192,10 +177,36 @@ export const useFetch =(url:string, options?:FetchOptions):ParsedCacheRecord=>
     const [state, dispatch] = React.useContext(IsoContext);
     const parsed = React.useRef(null);
 
+    const fetchOptions = {proxy:true, parse:true, ...options};
+    const fetchURL = (fetchOptions.proxy && state.Client) ? "/proxy/"+encodeURIComponent(url) : url;
+
     const match:ParsedCacheRecord|null = state.Data[url];
     if(!match)
     {
-        const pending = LeLoader(url, {proxy:true, parse:true, ...options});
+        let error = false;
+        let text:false|string = false;
+        dispatch({type:"DataReplace", payload:[url, { Data: false, Error: false, Expiry: 0, Pending: true }]});
+
+        const pending = fetch(fetchURL)
+        .then(response=>
+        {
+            if(response.status !== 200) { throw text; } 
+            return response.text()
+        })
+        .then(parsed=>
+        {
+            text = parsed;
+        })
+        .catch((e:unknown)=>
+        {
+            error = true;
+            console.log("fetch error", e, fetchURL);
+        })
+        .finally(()=>
+        {
+            dispatch({type:"DataReplace", payload:[url, { Data: text, Error: error, Expiry: 0, Pending: false }]});
+        })
+              
         if(!state.Client){ state.Queue.push(pending); }
         return { Data: false, Error: false, Expiry: 0, Pending: true, JSON:false };
     }
@@ -207,7 +218,7 @@ export const useFetch =(url:string, options?:FetchOptions):ParsedCacheRecord=>
         }
         else
         {
-            if(options?.parse !== false && typeof match.Data == "string")
+            if(fetchOptions.parse !== false && typeof match.Data == "string")
             {
                 parsed.current = JSON.parse(match.Data);
                 match.JSON = parsed.current;
