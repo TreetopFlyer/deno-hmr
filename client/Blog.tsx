@@ -1,5 +1,5 @@
 import React from "react";
-import { Metas, usePath, Switch, Case } from "../source/client.tsx";
+import { Metas, usePath, Switch, Case } from "amber";
 
 export default ()=>
 {

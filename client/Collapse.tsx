@@ -38,7 +38,8 @@ export const useScreenSize =(inSize:number)=>
     return sizeGet;
 };
 
-
+type BranchState = [open:boolean, instant:boolean, threshold:boolean];
+const CTXBranch = React.createContext([ [true, false, true], (arg)=>{}] as [BranchState, React.Dispatch<React.SetStateAction<BranchState>>])
 const CTXMenu = React.createContext(
     {
         Adjust:(inAmount:number)=>{},
@@ -46,18 +47,6 @@ const CTXMenu = React.createContext(
         Open:true
     }
 );
-
-type BranchState = [open:boolean, instant:boolean, threshold:boolean];
-const CTXBranch = React.createContext([ [true, false, true], (arg)=>{}] as [BranchState, React.Dispatch<React.SetStateAction<BranchState>>])
-
-export const BranchButton =({children, style, className, classActive}:{children:React.ReactNode, style?:Record<string, string>, className?:string, classActive?:string})=>
-{
-    /// BranchState
-    const [openGet, openSet] = React.useContext(CTXBranch);
-    let classes = className;
-    if(openGet[0]){ classes += " " + classActive??"" }
-    return <div style={style} onClick={e=>openSet([!openGet[0], false, openGet[2]])} className={ classes }><p>{openGet[0]?"open":"closed"}</p>{children}</div>;
-};
 
 export const Branch =({children, open, away, style, className}:{children:React.ReactNode, open?:boolean, away?:boolean, style?:Record<string, string>, className?:string})=>
 {
@@ -87,6 +76,15 @@ export const Branch =({children, open, away, style, className}:{children:React.R
             {children}
         </CTXBranch.Provider>
     </div>
+};
+
+export const BranchButton =({children, style, className, classActive}:{children:React.ReactNode, style?:Record<string, string>, className?:string, classActive?:string})=>
+{
+    /// BranchState
+    const [openGet, openSet] = React.useContext(CTXBranch);
+    let classes = className;
+    if(openGet[0]){ classes += " " + classActive??"" }
+    return <div style={style} onClick={e=>openSet([!openGet[0], false, openGet[2]])} className={ classes }><p>{openGet[0]?"open":"closed"}</p>{children}</div>;
 };
 
 export const BranchMenu =({children, style, className}:{children:React.ReactNode, style?:Record<string, string>, className?:string})=>

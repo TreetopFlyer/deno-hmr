@@ -105,7 +105,6 @@ ${  options.Server ?
     :
     /* /// Create Mode: client-side rendering and setup of twind */
     `import Reloader from "${RoutePaths.HMRSource}";
-    import Search from "/client/Search.tsx"
     Reloader("reload-complete", window.HMR.update);
     import { setup } from "https://esm.sh/twind@0.16.17/shim";
     setup(${JSON.stringify(Loaded.Themed)});
@@ -314,8 +313,21 @@ serve(async(inRequest)=>
     else if(url.pathname.startsWith("/proxy/"))
     {
         const urlPassed = url.pathname.substring(("/proxy/").length);
-        const response = await fetch(decodeURIComponent(urlPassed));
+        const urlParsed = decodeURIComponent(urlPassed);
+        console.log(`proxy fetch`, urlParsed);
+        const response = await fetch(urlParsed);
         return response;
+    }
+    else if(url.pathname.startsWith("/proxy-test"))
+    {
+        try
+        {
+            const response = await fetch(`http://localhost:8000/proxy/https%3A%2F%2Ftruthforlife.org%2Fresources%2Fsermons%2Frecent%2Fjson%2F`);
+            const text = await response.text();
+            if(response.status !== 200) { throw text; }   
+        }
+        catch(e:unknown){ console.log("proxy-test fetch error"); }
+        
     }
     else
     {

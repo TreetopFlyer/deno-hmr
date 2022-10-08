@@ -2,7 +2,7 @@ import { string } from "https://esm.sh/v95/@types/prop-types@15.7.5/index.d.ts";
 import { useEffect } from "https://esm.sh/v95/@types/react@18.0.18/index.d.ts";
 import React from "react";
 
-export type CacheRecord = { Data:false|string, Error:boolean, Expiry:number|false, Pending:boolean };
+export type CacheRecord = { Data:false|string|unknown, Error:boolean, Expiry:number|false, Pending:boolean, JSON?:unknown };
 export type CacheQueue = Array<Promise<void>>;
 export type KeyedMeta = {Title?:string, Description?:string, Image?:string, Icon?:string};
 export type KeyedMetaID = {ID:string, Meta:KeyedMeta, Time:number}
@@ -108,8 +108,8 @@ const Loader = async(inURL:string, inDispatcher:(inAction:Actions)=>void):Promis
         text = await response.text();
         if(response.status !== 200) { throw text; }   
     }
-    catch(e:unknown){ error = true; }
-    inDispatcher({type:"DataReplace", payload:[inURL, { Data: text, Error: error, Expiry: 0, Pending: true }]});
+    catch(e:unknown){ error = true; console.log("fetch error", e, inURL); }
+    inDispatcher({type:"DataReplace", payload:[inURL, { Data: text, Error: error, Expiry: 0, Pending: false }]});
 };
 
 export const PathParse =(route:URL)=>
@@ -184,24 +184,38 @@ export const Metas =({title, descr, image}:{title?:string, descr?:string, image?
     return <em>you set {title}</em>;
 }
 
-export const useFetch =(url:string, options:{proxy?:boolean}):CacheRecord=>
+type ParsedCacheRecord = CacheRecord & {JSON?:false|unknown}
+export const useFetch =(url:string, options?:{proxy?:boolean, parse?:boolean}):ParsedCacheRecord=>
 {
     const [state, dispatch] = React.useContext(IsoContext);
+    const parsed = React.useRef(null);
 
     if(options?.proxy)
     {
         url = "/proxy/"+encodeURIComponent(url);
     }
     
-    const match:CacheRecord|null = state.Data[url];
+    const match:ParsedCacheRecord|null = state.Data[url];
     if(!match)
     {
         const pending = Loader(url, dispatch);
         if(!state.Client){ state.Queue.push(pending); }
-        return { Data: false, Error: false, Expiry: 0, Pending: true };
+        return { Data: false, Error: false, Expiry: 0, Pending: true, JSON:false };
     }
     else
     {
+        if(parsed.current)
+        {
+            match.JSON = parsed.current;
+        }
+        else
+        {
+            if(options?.parse !== false && typeof match.Data == "string")
+            {
+                parsed.current = JSON.parse(match.Data);
+                match.JSON = parsed.current;
+            }
+        }
         return match;
     }
 };
