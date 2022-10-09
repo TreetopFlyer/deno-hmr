@@ -238,23 +238,31 @@ const Effects =()=>
     React.useEffect(()=>{ document.title = metasGet.Title??""; }, [metasGet.Title]);
     React.useEffect(()=>
     {
-        document.addEventListener("click", (e:Event)=>
+        window.addEventListener("popstate", (e)=>
         {
-            let path = [e.target];
-            let pathStep = e.target;
-            while(pathStep.parentElement != document.body)
+            const u = new URL(document.location.href);
+            const p = PathParse(u);
+            routeSet(p);
+        })
+        document.addEventListener("click", (e:MouseEvent)=>
+        {
+            const path = [e.target];
+            let pathStep:HTMLAnchorElement = e.target as HTMLAnchorElement;
+            while(pathStep.parentElement && pathStep.parentElement != document.body)
             {
-                if(pathStep.href)
+                if(pathStep.hasAttribute("href"))
                 {
                     e.preventDefault();
-                    history.pushState({}, '', pathStep.href);
+
                     const u = new URL(pathStep.href);
                     const p = PathParse(u);
                     routeSet(p);
+
+                    history.pushState({path:p}, "", pathStep.href);
                     break;
                 }
-              pathStep = pathStep.parentElement;
-              path.push(pathStep);
+                pathStep = pathStep.parentElement as HTMLAnchorElement;
+                path.push(pathStep);
             }
         });
 

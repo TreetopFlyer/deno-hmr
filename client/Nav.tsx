@@ -20,11 +20,10 @@ export default ()=>
     const big = useScreenSize(768);
     return <nav className="flex flex-col md:gap-5 md:flex-row">
         <h1 className="p-4 text-xl text-red-500 font-black">{big?"over 768":"under768"}</h1>
-        <Menu title="Daily">
-            <a className="px-3 py-2 text-sm text-white font-bold">Program</a>
-            <a className="px-3 py-2 text-sm text-white font-bold">AB Devotion</a>
-            <a className="px-3 py-2 text-sm text-white font-bold">CHS Devotion</a>
-            <a className="px-3 py-2 text-sm text-white font-bold">Reading</a>
+        <Menu title="Go To">
+            <a href="/" className="px-3 py-2 text-sm text-white font-bold">Home</a>
+            <a href="/about" className="px-3 py-2 text-sm text-white font-bold">About</a>
+            <a href="/sermons/great-commandment-part-two" className="px-3 py-2 text-sm text-white font-bold">Great commandment</a>
         </Menu>
         <Branch className="flex-1" away>
             <BranchButton>Sermons</BranchButton>
