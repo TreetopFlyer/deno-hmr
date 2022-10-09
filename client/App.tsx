@@ -1,5 +1,5 @@
 import React from "react";
-import { useFetch, useRoute, Switch, Case, Metas } from "amber";
+import { useFetch, useRoute, usePath, Switch, Case, Metas } from "amber";
 import Blog from "./Blog.tsx";
 import Nav from "./Nav.tsx";
 
@@ -28,9 +28,23 @@ video_poster_image: "/static/uploads/resource_banners/video-generic-playerimage2
 video_url: "https://tflmedia-new.s3.amazonaws.com/video/high/3565-thegreatcommandmentpartone.mp4"
     */
 
+const Subpage =()=>
+{   
+    const { Params } = usePath();
+    return <div>
+        <Metas title="sermon"/>
+        {JSON.stringify(Params)}
+    </div>
+};
+
 export default ()=>
 {   
     const Sermons = useFetch(`https://truthforlife.org/resources/sermons/recent/json/`, {proxy:true});
+    let list;
+    if(Sermons.JSON)
+    {
+        list = Sermons.JSON.map(s=><a href={`/sermons/${s.slug}`}>{s.title}</a>)
+    }
 
     return <div>
         <Metas title="A Website"/>
@@ -41,11 +55,13 @@ export default ()=>
                 <p>home page!!!</p>
                 <Switch value={Sermons.Pending}>
                     <Case value={true}>Loading...</Case>
-                    <Case>{Sermons.JSON && Sermons.JSON[0].title} </Case>
+                    <Case>
+                        {list}
+                    </Case>
                 </Switch>
             </Case>
             <Case value="/sermons/:slug">
-                <Metas title="Home"/>
+                <Subpage/>
             </Case>
             <Case>
                 <p className="text-lg text-red-500">404!</p>
