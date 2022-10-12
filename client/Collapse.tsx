@@ -52,6 +52,7 @@ const CTXMenu = React.createContext(
 export const Branch =({children, open, away, style, className}:{children:React.ReactNode, open?:boolean, away?:boolean, style?:Record<string, string>, className?:string})=>
 {
     /// BranchState
+
     const binding = React.useState([open??false, false, open??false] as BranchState);
     const ref = React.useRef(null as null|HTMLDivElement);
 
@@ -61,7 +62,8 @@ export const Branch =({children, open, away, style, className}:{children:React.R
         {
             const handler = (inEvent:MouseEvent) =>
             {
-                if(ref.current && !ref.current.contains(inEvent.target))
+                const target = inEvent.target as HTMLAnchorElement
+                if(ref.current && (!ref.current.contains(target) || target.href ))
                 {
                     /// BranchState
                     binding[1]([false, false, binding[0][2]]);
@@ -70,7 +72,12 @@ export const Branch =({children, open, away, style, className}:{children:React.R
             document.addEventListener("click", handler);
             return () => document.removeEventListener("click", handler);
         }
-    }, []);
+    }, [away]);
+
+    React.useEffect(()=>
+    {
+        binding[1]([open??false, true, open??false]);
+    }, [open])
 
     return <div ref={ref} style={style} className={className}>
         <CTXBranch.Provider value={binding}>
@@ -131,7 +138,6 @@ export const BranchMenu =({children, style, className}:{children:React.ReactNode
         {
             openSet(open);
 
-            console.log(`is isntant?${instant}`)
             if(instant)
             {
                 ref.current.style.transition = "none";
@@ -171,7 +177,7 @@ export const BranchMenu =({children, style, className}:{children:React.ReactNode
             ContextMenu.Adjust(open ? ref.current.scrollHeight : -ref.current.scrollHeight);
         }
     }
-    , [open]);
+    , [open, ContextBranch]);
 
     React.useEffect(()=>
     {
@@ -192,7 +198,7 @@ export const BranchMenu =({children, style, className}:{children:React.ReactNode
     }
     , [ContextMenu.Done, ContextMenu.Open]);
 
-    return <div ref={ref} style={{...initGet, ...style}} className={"transition-all duration-300 overflow-hidden " + className}>
+    return <div ref={ref} style={{...initGet, ...style}} className={"transition-all duration-300 overflow-hidden " + className} >
         <CTXMenu.Provider value={{Adjust:doneGet ? (inAmount:number)=>{} : AdjustHandler, Done:doneGet, Open:openGet}}>{children}</CTXMenu.Provider>
     </div>;
 };

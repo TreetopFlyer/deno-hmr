@@ -166,7 +166,6 @@ export const Metas =({title, descr, image}:{title?:string, descr?:string, image?
     if(descr){metas.Description = descr;}
     if(image){metas.Image = image;}
     useMetas(metas);
-    return <em>you set {title}</em>;
 }
 
 
@@ -227,7 +226,20 @@ export const useFetch =(url:string, options?:FetchOptions):ParsedCacheRecord=>
         return match;
     }
 };
+export const Fetch =({url, fallback, children}:{url:string, fallback?:JSX.Element, children:(json:unknown|false)=>JSX.Element}):JSX.Element=>
+{
+    const fetch = useFetch(url, {proxy:true, parse:true});
 
+    if(fetch.Pending && fallback)
+    {
+        return fallback;
+    }
+    else
+    {
+        console.log(children);
+        return children(fetch.JSON);
+    }
+}
 
 type NavigationEvent = { canTransition: boolean, destination:{url:string}, transitionWhile: ( arg:void )=>void };
 const Effects =()=>

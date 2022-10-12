@@ -1,7 +1,43 @@
 import React from "react";
-import { useFetch, useRoute, usePath, Switch, Case, Metas } from "amber";
-import Blog from "./Blog.tsx";
+import { usePath, Switch, Case, Metas, Fetch } from "amber";
 import Nav from "./Nav.tsx";
+
+
+type VideoState = {video:{file:string, name:string, page:string, time:number}|false, open:boolean};
+type VideoStateBinding = [state:VideoState, update:React.Dispatch<React.SetStateAction<VideoState>>];
+const VideoContext = React.createContext([{video:false, open:false} as VideoState, (inState:VideoState)=>{}] as VideoStateBinding);
+export const useVideo =()=>
+{
+    const [getVideo, setVideo] = React.useContext(VideoContext);
+    return (inFile:string, inPage:string, inName:string, inTime=0)=>setVideo(
+        {
+            open: getVideo.open,
+            video:
+            {
+                file:inFile,
+                name:inName,
+                page:inPage,
+                time:inTime
+            }
+        }
+    );
+};
+const Player =()=>
+{
+    const [videoGet, videoSet] = React.useContext(VideoContext);
+
+    return <div className="block fixed bottom-0 left-0">
+        { videoGet.video?.file &&
+        <div className="max-w-xl">
+            <button className="p-2 bg-black text-white" onClick={e=>videoSet({...videoGet, video:false})}>close</button>
+            <h3 className="bg-white p-2">{videoGet.video.name}</h3>
+            <video autoplay key={videoGet.video.file} className="w-full h-auto" controls>
+                <source src={videoGet.video.file} type="video/mp4"/>
+            </video>
+        </div>
+        }
+    </div>;
+};
 
     /*
     audio_duration: 2574
@@ -30,43 +66,67 @@ video_url: "https://tflmedia-new.s3.amazonaws.com/video/high/3565-thegreatcomman
 
 const Subpage =()=>
 {   
+    const play = useVideo();
     const { Params } = usePath();
+
     return <div>
-        <Metas title="sermon"/>
-        {JSON.stringify(Params)}
+        <Fetch url={`https://truthforlife.org/resources/sermons/${Params.slug}/json/`} fallback={<p>"loading..."</p>}>
+            {(json)=>
+            {
+                return <div className="max-w-2xl mx-auto p-3">
+                    <Metas title={json.title}/>
+                    <h3 className="text-2xl font-black">{json.title}</h3>
+                    <img className="block w-full h-auto" src={`https://truthforlife.org`+json.image}/>
+                    <button onClick={e=>play(json.video_url, "", json.title)}>Play</button>
+                    <div dangerouslySetInnerHTML={{__html:json.transcript}}></div>
+                </div>
+            }}
+        </Fetch>
+    </div>;
+};
+
+const MainPage =()=>
+{
+    return <div>
+        <Metas title="Home Page"/>
+        <h3 className="my-2 text-xl font-sans font-black">Sermons</h3>
+        <div className="flex flex-row overflow-visible">
+            <Fetch url="https://truthforlife.org/resources/sermons/recent/json/" fallback={<p>Loading</p>}>
+                {(sermons)=>
+                {
+                    return sermons.map(s=><a href={`/sermons/${s.slug}`}>
+                        <img className="block w-full h-auto max-w-sm" src={`https://truthforlife.org`+s.image} />
+                        <div className="p-2">
+                            <div>{s.title}</div>
+                            <div>{s.preach_date}</div>
+                        </div>
+                    </a>)
+                }}
+            </Fetch>
+        </div>
     </div>
 };
 
 export default ()=>
 {   
-    const Sermons = useFetch(`https://truthforlife.org/resources/sermons/recent/json/`, {proxy:true});
-    let list;
-    if(Sermons.JSON)
-    {
-        list = Sermons.JSON.map(s=><a href={`/sermons/${s.slug}`}>{s.title}</a>)
-    }
+    const videoBinding:VideoStateBinding = React.useState({video:false, open:true} as VideoState);
 
     return <div>
         <Metas title="A Website"/>
-        <Nav/>
-        <Switch>
-            <Case value="/">
-                <Metas title="Home"/>
-                <p>home page!!!</p>
-                <Switch value={Sermons.Pending}>
-                    <Case value={true}>Loading...</Case>
-                    <Case>
-                        {list}
-                    </Case>
-                </Switch>
-            </Case>
-            <Case value="/sermons/:slug">
-                <Subpage/>
-            </Case>
-            <Case>
-                <p className="text-lg text-red-500">404!</p>
-            </Case>
-        </Switch>
-
+        <VideoContext.Provider value={videoBinding}>
+            <Nav/>
+            <Switch>
+                <Case value="/">
+                    <MainPage/>
+                </Case>
+                <Case value="/sermons/:slug">
+                    <Subpage/>
+                </Case>
+                <Case>
+                    <p className="text-lg text-red-500">404!</p>
+                </Case>
+            </Switch>    
+            <Player/>        
+        </VideoContext.Provider>
     </div>;
 };
