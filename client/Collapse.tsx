@@ -39,8 +39,8 @@ export const useScreenSize =(inSize:number)=>
     return sizeGet;
 };
 
-type BranchState = [open:boolean, instant:boolean, threshold:boolean];
-const CTXBranch = React.createContext([ [true, false, true], (arg)=>{}] as [BranchState, React.Dispatch<React.SetStateAction<BranchState>>])
+type BranchState = {open:boolean, instant:boolean, threshold:boolean, away:boolean};
+const CTXBranch = React.createContext([ {open:true, instant:false, threshold:true, away:false}, (arg)=>{}] as [BranchState, React.Dispatch<React.SetStateAction<BranchState>>])
 const CTXMenu = React.createContext(
     {
         Adjust:(inAmount:number)=>{},
@@ -51,9 +51,7 @@ const CTXMenu = React.createContext(
 
 export const Branch =({children, open, away, style, className}:{children:React.ReactNode, open?:boolean, away?:boolean, style?:Record<string, string>, className?:string})=>
 {
-    /// BranchState
-
-    const binding = React.useState([open??false, false, open??false] as BranchState);
+    const binding = React.useState({open:open??false, instant:false, threshold:open??false, away:false} as BranchState);
     const ref = React.useRef(null as null|HTMLDivElement);
 
     React.useEffect(()=>
@@ -66,7 +64,7 @@ export const Branch =({children, open, away, style, className}:{children:React.R
                 if(ref.current && (!ref.current.contains(target) || target.href ))
                 {
                     /// BranchState
-                    binding[1]([false, false, binding[0][2]]);
+                    binding[1]({open:false, instant:false, threshold:binding[0].threshold, away:false});
                 }
             }
             document.addEventListener("click", handler);
@@ -76,7 +74,7 @@ export const Branch =({children, open, away, style, className}:{children:React.R
 
     React.useEffect(()=>
     {
-        binding[1]([open??false, true, open??false]);
+        binding[1]({open:open??false, instant:true, threshold:open??false, away:false});
     }, [open])
 
     return <div ref={ref} style={style} className={className}>
@@ -89,21 +87,22 @@ export const Branch =({children, open, away, style, className}:{children:React.R
 export const BranchButton =({children, style, className, classActive}:{children:React.ReactNode, style?:Record<string, string>, className?:string, classActive?:string})=>
 {
     /// BranchState
-    const [openGet, openSet] = React.useContext(CTXBranch);
+    const [branchGet, branchSet] = React.useContext(CTXBranch);
     let classes = className;
-    if(openGet[0]){ classes += " " + classActive??"" }
-    return <div style={style} onClick={e=>openSet([!openGet[0], false, openGet[2]])} className={ classes }><p>{openGet[0]?"open":"closed"}</p>{children}</div>;
+    if(branchGet.open){ classes += " " + classActive??"" }
+    return <div style={style} onClick={e=>branchSet({...branchGet, instant:false, open:!branchGet.open})} className={ classes }><p>{branchGet.open?"open":"closed"}</p>{children}</div>;
 };
+
 
 export const BranchMenu =({children, style, className}:{children:React.ReactNode, style?:Record<string, string>, className?:string})=>
 {
-    const ContextMenu = React.useContext(CTXMenu);
-    const ContextBranch = React.useContext(CTXBranch);
-    const [open, instant] = ContextBranch[0];
+    const ContextMenu = React.useContext(CTXMenu); // used to send adjust signals up
+    const [branchGet, branchSet] = React.useContext(CTXBranch); // used to send instant collapse signals down
+    
     const ref = React.useRef(null as null|HTMLDivElement);
-    const [initGet] = React.useState(open?{}:{height:"0px"});
+    const [initGet] = React.useState(branchGet.open?{}:{height:"0px"});
     const [doneGet, doneSet] = React.useState(true);
-    const [openGet, openSet] = React.useState(open);
+    const [openGet, openSet] = React.useState(branchGet.open);
 
     const DoneHandler = (inEvent:TransitionEvent)=>
     {
@@ -119,10 +118,12 @@ export const BranchMenu =({children, style, className}:{children:React.ReactNode
         {
             const height = parseInt(ref.current.style.height);
             ref.current.style.height = `${height + inAmount}px`;
+            console.log(`adjusting`, inAmount);
             ContextMenu.Adjust(inAmount);
         }
     };
 
+    // transition handlers (on mount)
     React.useEffect(()=>
     {
         if(ref.current)
@@ -132,16 +133,18 @@ export const BranchMenu =({children, style, className}:{children:React.ReactNode
         }
     }, []);
 
+    // respond to "context prop" changes from <Branch/>
     React.useEffect(()=>
     {
         if(ref.current)
         {
-            openSet(open);
+            console.log(`prop change`, branchGet);
+            openSet(branchGet.open);
 
-            if(instant)
+            if(branchGet.instant)
             {
                 ref.current.style.transition = "none";
-                ref.current.style.height = (open ? ref.current.scrollHeight : 0) + "px";
+                ref.current.style.height = (branchGet.open ? ref.current.scrollHeight : 0) + "px";
                 setTimeout(()=>
                 {
                     if(ref.current)
@@ -155,14 +158,14 @@ export const BranchMenu =({children, style, className}:{children:React.ReactNode
             
             if(!doneGet) // interrupted transition
             {
-                ref.current.style.height = (open ? ref.current.scrollHeight : 0) + "px";
+                ref.current.style.height = (branchGet.open ? ref.current.scrollHeight : 0) + "px";
             }
-            if(doneGet && open) // from standing closed
+            if(doneGet && branchGet.open) // from standing closed
             {
                 doneSet(false);
                 ref.current.style.height = ref.current.scrollHeight + "px";
             }
-            if(doneGet && !open) // from standing open
+            if(doneGet && !branchGet.open) // from standing open
             {
                 doneSet(false);
                 ref.current.style.height = ref.current.clientHeight + "px";
@@ -174,26 +177,28 @@ export const BranchMenu =({children, style, className}:{children:React.ReactNode
                 });
             }
 
-            ContextMenu.Adjust(open ? ref.current.scrollHeight : -ref.current.scrollHeight);
+            ContextMenu.Adjust(branchGet.open ? ref.current.scrollHeight : -ref.current.scrollHeight);
         }
     }
-    , [open, ContextBranch]);
+    , [branchGet.open, branchGet.instant]);
 
+    // clear the height style if an open animation in done
     React.useEffect(()=>
     {
-        if(ref.current && doneGet && open)
+        if(ref.current && doneGet && branchGet.open)
         {
             ref.current.style.height = "";
         }
     }
     , [doneGet]);
 
+    // instant collapse when parent closes
     React.useEffect(()=>
     {
         if(ContextMenu.Done && !ContextMenu.Open)
         {
             /// BranchState
-            ContextBranch[1]([false, true, ContextBranch[0][2]]);
+            branchSet({...branchGet, open:false, instant:true});
         }
     }
     , [ContextMenu.Done, ContextMenu.Open]);

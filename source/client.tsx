@@ -236,7 +236,6 @@ export const Fetch =({url, fallback, children}:{url:string, fallback?:JSX.Elemen
     }
     else
     {
-        console.log(children);
         return children(fetch.JSON);
     }
 }
