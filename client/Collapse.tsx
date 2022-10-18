@@ -39,8 +39,8 @@ export const useScreenSize =(inSize:number)=>
     return sizeGet;
 };
 
-type BranchState = {open:boolean, instant:boolean, threshold:boolean, ref:React.MutableRefObject<HTMLDivElement | null>|false};
-const CTXBranch = React.createContext([ {open:true, instant:false, threshold:true, ref:false}, (arg)=>{}] as [BranchState, React.Dispatch<React.SetStateAction<BranchState>>])
+type BranchState = {open:boolean, instant:boolean, threshold:boolean, check:(inTarget:HTMLAnchorElement)=>boolean, away:boolean};
+const CTXBranch = React.createContext([ {open:true, instant:false, threshold:true, check:(inTarget)=>false, away:false}, (arg)=>{}] as [BranchState, React.Dispatch<React.SetStateAction<BranchState>>])
 const CTXMenu = React.createContext(
     {
         Adjust:(inAmount:number)=>{},
@@ -49,12 +49,22 @@ const CTXMenu = React.createContext(
     }
 );
 
-export const Branch =({children, open, away, style, className}:{children:React.ReactNode, open?:boolean, away?:boolean, style?:Record<string, string>, className?:string})=>
+export const Branch =({children, open, away, style, className, id}:{children:React.ReactNode, open?:boolean, away?:boolean, style?:Record<string, string>, className?:string, id?:string})=>
 {
     const [Parent] = React.useContext(CTXBranch);
     const ref = React.useRef(null as null|HTMLDivElement);
-    const binding = React.useState({open:open??false, instant:false, threshold:open??false, ref} as BranchState);
-    const check = ()=>{ console.log(Parent.ref) };
+
+    const binding = React.useState({
+        open:open??false,
+        instant:false,
+        threshold:open??false,
+        check(inTarget)
+        {
+            return ref.current?.contains(inTarget)
+        },
+        away
+    } as BranchState);
+
 
     React.useEffect(()=>
     {
@@ -62,19 +72,19 @@ export const Branch =({children, open, away, style, className}:{children:React.R
         {
             const handler = (inEvent:MouseEvent) =>
             {
-                //check();
-                console.log(Parent.ref)
                 const target = inEvent.target as HTMLAnchorElement;
                 if(ref.current && (!ref.current.contains(target) || target.href ))
                 {
                     // about to close due to click outside.
                     // but first, check if there's a parent that also contians the target
-                    if(Parent.ref && Parent.ref.current && !Parent.ref.current.contains(target))
+                    if(Parent.away && !Parent.check(target))
                     {
+                        console.log(`${id}: Away, parent should collapse`)
                         return;
                     }
                     else
                     {
+                        console.log(`${id}: Away, ill collapse`)
                         binding[1]({...binding[0], open:false, instant:false});
                     }
                 }
@@ -86,14 +96,14 @@ export const Branch =({children, open, away, style, className}:{children:React.R
 
     React.useEffect(()=>
     {
-        binding[1]({...binding[0], open:open??false, instant:true});
+        binding[1]({...binding[0], open:open??false});
     }, [open])
 
     return <div ref={ref} style={style} className={className}>
-        <CTXBranch.Provider value={binding}>
+        <CTXBranch.Provider value={[{...binding[0], away:away??false}, binding[1]]}>
             {children}
         </CTXBranch.Provider>
-    </div>
+    </div>;
 };
 
 export const BranchButton =({children, style, className, classActive}:{children:React.ReactNode, style?:Record<string, string>, className?:string, classActive?:string})=>
